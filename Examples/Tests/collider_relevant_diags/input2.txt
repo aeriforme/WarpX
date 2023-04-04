@@ -5,12 +5,12 @@ my_constants.mc2 = 0.510998950e6
 my_constants.ps = 1.0e-12
 
 # BOX
-my_constants.Lx = 2.e-3
-my_constants.Ly = 2.e-3
-my_constants.Lz = 2.e-3
-my_constants.nx = 8.
-my_constants.ny = 8.
-my_constants.nz = 8.
+my_constants.Lx = 1.e-3
+my_constants.Ly = 1.e-3
+my_constants.Lz = 1.e-3
+my_constants.nx = 16.
+my_constants.ny = 16.
+my_constants.nz = 16.
 my_constants.dx = Lx/nx
 my_constants.dy = Ly/ny
 my_constants.dy = Lz/nz
@@ -68,14 +68,9 @@ particles.photon_species = pho
 
 beam_e.species_type = electron
 beam_e.injection_style = NUniformPerCell
-beam_e.num_particles_per_cell_each_dim = 10 10 10
+beam_e.num_particles_per_cell_each_dim = 2 2 10
 beam_e.profile = constant
-beam_e.xmin = -0.5*Lx
-beam_e.ymin = -0.5*Ly
-beam_e.zmin = -0.5*Lz
-beam_e.xmax = 0.5*Lx
-beam_e.ymax = 0.5*Ly
-beam_e.zmax = 0.5*Lz
+
 beam_e.density = 1. 
 beam_e.momentum_distribution_type = constant
 beam_e.ux = 0.1
@@ -91,14 +86,9 @@ beam_e.do_not_push = 1
 
 beam_p.species_type = positron
 beam_p.injection_style = NUniformPerCell
-beam_p.num_particles_per_cell_each_dim = 10 10 10
+beam_p.num_particles_per_cell_each_dim = 2 2 10
 beam_p.profile = constant
-beam_p.xmin = -0.5*Lx
-beam_p.ymin = -0.5*Ly
-beam_p.zmin = -0.5*Lz
-beam_p.xmax = 0.5*Lx
-beam_p.ymax = 0.5*Ly
-beam_p.zmax = 0.5*Lz
+
 beam_p.density = 1. 
 beam_p.momentum_distribution_type = constant
 beam_p.ux = 0.1

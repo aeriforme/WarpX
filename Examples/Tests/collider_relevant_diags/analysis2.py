@@ -99,13 +99,45 @@ def luminosity():
         n1 = rho1/q1
         n2 = rho2/q2
         #print(np.where((n1>0), n1, 0.))
-        print(n1)
+        #print(n1)
         l = 2*np.sum(rho1/q1*rho2/q2)*dV
-        print('llllllllllllllllllllll ', l, np.sum(n1*n2), np.sum(n1*n1),np.sum(n2*n2))
+        #print('llllllllllllllllllllll ', l, np.sum(n1*n2), np.sum(n1*n1),np.sum(n2*n2))
         lumi.append(l)
     return lumi
 
 
+def disruption():
+    series = io.Series("diags/diag1/openpmd_%T.bp",io.Access.read_only) 
+    iterations = np.asarray(series.iterations)
+    D1, D2 = [], []
+    for n,ts in enumerate(iterations):
+        it = series.iterations[ts]
+        
+        y1 = it.particles["beam_e"]["position"]["y"].load_chunk()
+        y2 = it.particles["beam_p"]["position"]["y"].load_chunk()
+        
+        z1 = it.particles["beam_e"]["position"]["z"].load_chunk()
+        z2 = it.particles["beam_p"]["position"]["z"].load_chunk()
+
+        w1 = it.particles["beam_e"]["weighting"][io.Mesh_Record_Component.SCALAR].load_chunk()
+        w2 = it.particles["beam_p"]["weighting"][io.Mesh_Record_Component.SCALAR].load_chunk()
+
+        series.flush()
+        
+        y1_ave = np.average(y1, weights=w1)
+        y2_ave = np.average(y2, weights=w2)
+
+
+        y1_std = np.sqrt(np.average((y1-y1_ave)**2, weights=w1)) 
+        y2_std = np.sqrt(np.average((y2-y2_ave)**2, weights=w2))
+        
+        D1.append(y1_std)
+        D2.append(y2_std)
+
+    return D1, D2
+      
+
+    
 
 print('chi of electrons ----------------------------------------')
 print('theory:', chi(u1x, u1y, u1z))
@@ -119,11 +151,11 @@ chimin = np.loadtxt(fname)[:,18]
 print('ParticleExtrema diag = ', chimin)
 
 fname='diags/reducedfiles/ColliderRelevant_beam_e_beam_p.txt'
-chimin = np.loadtxt(fname)[:,6]
+chimin = np.loadtxt(fname)[:,10]
 print('ColliderRelevant diag = ', chimin)
 
 fname='diags/reducedfiles/ColliderRelevant_beam_e_beam_p.txt'
-chiave = np.loadtxt(fname)[:,7]
+chiave = np.loadtxt(fname)[:,11]
 print('ColliderRelevant diag = ', chiave)
 
 
@@ -144,9 +176,15 @@ print('theory from input', 2.*n1*n2*Lx*Ly*Lz)
 
 
 
+print('distruption')
+print('from PIC data', disruption())
+
+D1diag = np.loadtxt(fname)[:,9]
+print('ColliderRelevant diag ele = ', D1diag)
 
 
-
+D2diag = np.loadtxt(fname)[:,4]
+print('ColliderRelevant diag pos = ', D2diag)
 
 
 
