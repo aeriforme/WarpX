@@ -8,6 +8,7 @@
 
 #include "BeamRelevant.H"
 #include "ChargeOnEB.H"
+#include "ColliderRelevant.H"
 #include "FieldEnergy.H"
 #include "FieldMaximum.H"
 #include "FieldProbe.H"
@@ -63,7 +64,8 @@ MultiReducedDiags::MultiReducedDiags ()
             {"ParticleHistogram",     [](CS s){return std::make_unique<ParticleHistogram>(s);}},
             {"ParticleNumber",        [](CS s){return std::make_unique<ParticleNumber>(s);}},
             {"ParticleExtrema",       [](CS s){return std::make_unique<ParticleExtrema>(s);}},
-            {"ChargeOnEB",  [](CS s){return std::make_unique<ChargeOnEB>(s);}}
+            {"ChargeOnEB",            [](CS s){return std::make_unique<ChargeOnEB>(s);}},
+            {"ColliderRelevant",      [](CS s){return std::make_unique<ColliderRelevant>(s);}}
     };
     // loop over all reduced diags and fill m_multi_rd with requested reduced diags
     std::transform(m_rd_names.begin(), m_rd_names.end(), std::back_inserter(m_multi_rd),

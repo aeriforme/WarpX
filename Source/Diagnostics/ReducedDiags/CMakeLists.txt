@@ -19,4 +19,5 @@ target_sources(WarpX
     FieldReduction.cpp
     FieldProbe.cpp
     ChargeOnEB.cpp
+    ColliderRelevant.cpp
 )
