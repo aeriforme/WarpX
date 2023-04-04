@@ -91,7 +91,10 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
 #endif
 
     // luminosity, chimin1, chiave1, chimax1, chimin2, chiave2, chimax2
-    m_data.resize(1+2*nSpecies, 0.0_rt);
+//    m_data.resize(1+2*nSpecies, 0.0_rt);
+//#if defined(WARPX_DIM_3D)
+//    m_data.resize(1+2*nSpecies, 0.0_rt);
+//#endif
 
     if (ParallelDescriptor::IOProcessor())
     {
@@ -115,10 +118,12 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
                
                 amrex::AllPrint() << "WHICH SPECIES  " << species_names[i_s] << "\n"; 
 
-
                 // get WarpXParticleContainer class object
                 auto const &myspc = mypc.GetParticleContainer(i_s);
-        
+#if defined(WARPX_DIM_3D)
+                add_diag("yz_ave_"+species_names[i_s], "yz_ave_"+species_names[i_s]+"(m)");
+                add_diag("yz_std_"+species_names[i_s], "yz_std_"+species_names[i_s]+"(m)");
+#endif
                 if (myspc.DoQED()){
                     amrex::AllPrint() << "STO FACENDO HEADER  " << species_names[i_s] << "\n"; 
                     add_diag("chimin_"+species_names[i_s], "chimin_"+species_names[i_s]+"()");
@@ -126,7 +131,7 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
                     add_diag("chimax_"+species_names[i_s], "chimax_"+species_names[i_s]+"()");
                 }
             }    
-            //m_data.resize(all_diag_names.size());
+            m_data.resize(all_diag_names.size());
             amrex::AllPrint() << "AIUTOOOOOO " << all_diag_names.size() << "\n"; 
             for (const auto& name : all_diag_names){
                 const auto& el = m_headers_indices[name];
@@ -205,13 +210,43 @@ void ColliderRelevant::ComputeDiags (int step)
         if (species_names[i_s] == m_beam_name[1]){
             n2 = myspc.GetChargeDensity(0);
             n2->mult(1./q); 
-        }
+        }        
 
         // wtot
         Real wtot = ReduceSum( myspc,
         [=] AMREX_GPU_HOST_DEVICE (const PType& p)
         { return p.rdata(PIdx::w); });
         ParallelDescriptor::ReduceRealSum(wtot);
+
+#if defined(WARPX_DIM_3D)
+
+        // yz_ave 
+        Real yz_ave = ReduceSum( myspc,
+        [=] AMREX_GPU_HOST_DEVICE (const PType& p)
+        { 
+            const amrex::Real w  = p.rdata(PIdx::w);
+            const amrex::Real yz = std::sqrt(p.pos(1)*p.pos(1) + p.pos(2)*p.pos(2));
+            return w*yz; });
+        ParallelDescriptor::ReduceRealSum(yz_ave);
+        yz_ave = yz_ave / wtot;
+
+        // yz_std 
+        Real yz_std = ReduceSum( myspc,
+        [=] AMREX_GPU_HOST_DEVICE (const PType& p)
+        { 
+            const amrex::Real w  = p.rdata(PIdx::w);
+            const amrex::Real yz = std::sqrt(p.pos(1)*p.pos(1) + p.pos(2)*p.pos(2));
+            const amrex::Real tmp = (yz - yz_ave)*(yz - yz_ave)*w;
+            return tmp; });
+        ParallelDescriptor::ReduceRealSum(yz_ave);
+        yz_std = std::sqrt(yz_std) / wtot;
+
+        m_data[get_idx("yz_ave_"+species_names[i_s])] = yz_ave;
+        m_data[get_idx("yz_std_"+species_names[i_s])] = yz_std;
+
+#endif
+
+
 
 #if (defined WARPX_QED)
         // get number of level (int)
@@ -331,10 +366,7 @@ void ColliderRelevant::ComputeDiags (int step)
             ParallelDescriptor::ReduceRealMin(chimin_f);
             ParallelDescriptor::ReduceRealMax(chimax_f);
             ParallelDescriptor::ReduceRealSum(chiave_f);
-        }
 
-        if (myspc.DoQED())
-        {
             m_data[get_idx("chimin_"+species_names[i_s])] = chimin_f;
             m_data[get_idx("chiave_"+species_names[i_s])] = chiave_f/wtot;
             m_data[get_idx("chimax_"+species_names[i_s])] = chimax_f;
