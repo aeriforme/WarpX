@@ -17,6 +17,7 @@
 #include "Utils/WarpXConst.H"
 #include "Utils/TextMsg.H"
 #include "WarpX.H"
+#include <ablastr/coarsen/sample.H>
 
 #include <AMReX_GpuQualifiers.H>
 #include <AMReX_PODVector.H>
@@ -168,7 +169,7 @@ void ColliderRelevant::ComputeDiags (int step)
     auto & warpx = WarpX::GetInstance();
 
     // get cell size
-    amrex::Geometry const & geom = warpx.Geom(0);
+    amrex::Geometry const & geom = warpx.Geom(0); 
 #if defined(WARPX_DIM_1D_Z)
         auto dV = geom.CellSize(0);
 #elif defined(WARPX_DIM_XZ) || defined(WARPX_DIM_RZ)
@@ -218,6 +219,12 @@ void ColliderRelevant::ComputeDiags (int step)
         { return p.rdata(PIdx::w); });
         ParallelDescriptor::ReduceRealSum(wtot);
 
+
+    Real ymin = geom.ProbLo(1); // Lower corner of the physical
+    Real zmin = geom.ProbLo(2); // Lower corner of the physical
+
+    amrex::AllPrint() << "DOMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIN " << ymin << " " << zmin << std::endl;
+
 #if defined(WARPX_DIM_3D)
 
         // yz_ave 
@@ -225,7 +232,7 @@ void ColliderRelevant::ComputeDiags (int step)
         [=] AMREX_GPU_HOST_DEVICE (const PType& p)
         { 
             const amrex::Real w  = p.rdata(PIdx::w);
-            const amrex::Real yz = std::sqrt(p.pos(1)*p.pos(1) + p.pos(2)*p.pos(2));
+            const amrex::Real yz = std::sqrt((p.pos(1)-ymin)*(p.pos(1)-ymin) + (p.pos(2)-zmin)*(p.pos(2)-zmin));
             return w*yz; });
         ParallelDescriptor::ReduceRealSum(yz_ave);
         yz_ave = yz_ave / wtot;
@@ -235,18 +242,16 @@ void ColliderRelevant::ComputeDiags (int step)
         [=] AMREX_GPU_HOST_DEVICE (const PType& p)
         { 
             const amrex::Real w  = p.rdata(PIdx::w);
-            const amrex::Real yz = std::sqrt(p.pos(1)*p.pos(1) + p.pos(2)*p.pos(2));
+            const amrex::Real yz = std::sqrt((p.pos(1)-ymin)*(p.pos(1)-ymin) + (p.pos(2)-zmin)*(p.pos(2)-zmin));
             const amrex::Real tmp = (yz - yz_ave)*(yz - yz_ave)*w;
             return tmp; });
         ParallelDescriptor::ReduceRealSum(yz_ave);
-        yz_std = std::sqrt(yz_std) / wtot;
+        yz_std = std::sqrt(yz_std / wtot);
 
         m_data[get_idx("yz_ave_"+species_names[i_s])] = yz_ave;
         m_data[get_idx("yz_std_"+species_names[i_s])] = yz_std;
 
 #endif
-
-
 
 #if (defined WARPX_QED)
         // get number of level (int)
@@ -373,17 +378,26 @@ void ColliderRelevant::ComputeDiags (int step)
         }
 #endif
     } // end loop over species
-    auto const n1_dot_n2 = amrex::MultiFab::Dot( *n1, 0, *n2, 0, 1, 0);    
+    
+    // make density MultiFabs from nodal to cell centered 
+    amrex::BoxArray ba = warpx.boxArray(0);
+    amrex::DistributionMapping dmap = warpx.DistributionMap(0);
+    constexpr int ncomp = 1;
+    constexpr int ngrow = 0;
+    amrex::MultiFab mf_dst1(ba.convert(IntVect{0,0,0}), dmap, ncomp, ngrow);
+    amrex::MultiFab mf_dst2(ba.convert(IntVect{0,0,0}), dmap, ncomp, ngrow);
+    ablastr::coarsen::sample::Coarsen(mf_dst1, *n1, 0, 0, ncomp, ngrow);
+    ablastr::coarsen::sample::Coarsen(mf_dst2, *n2, 0, 0, ncomp, ngrow);
+
+    auto const n1_dot_n2 = amrex::MultiFab::Dot( mf_dst1, 0, mf_dst2, 0, 1, 0);    
     // (1 - cos phi ) = 2
     auto const lumi = 2. * n1_dot_n2 * dV; 
-    //auto const n1_sq = amrex::MultiFab::Dot( *n1, 0, *n1, 0, 1, 0); 
 
-    
+    //auto const n1_sq = amrex::MultiFab::Dot( *n1, 0, *n1, 0, 1, 0); 
 
     //auto const n2_sq = amrex::MultiFab::Dot( *n2, 0, *n2, 0, 1, 0);    
     //amrex::AllPrint() << "AAAA " <<   lumi << "  " << n1_dot_n2 <<"  " << n1_sq << " " << n2_sq <<  " \n";  
     //amrex::AllPrint() << "AAAA " <<  n1_sq <<  " \n";  
-
 
     m_data[get_idx("lumi")] = lumi;
 }
