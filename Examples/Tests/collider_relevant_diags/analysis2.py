@@ -67,6 +67,9 @@ with open('./warpx_used_inputs', 'rt') as f:
             
 dV = Lx/nx * Ly/ny * Lz/nz
 
+ymin = -0.5*Ly 
+zmin = -0.5*Lz
+
     
 def chi(ux, uy, uz, Ex=Ex, Ey=Ey, Ez=Ez, Bx=Bx, By=By, Bz=Bz):
     #print(ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz)
@@ -100,7 +103,7 @@ def luminosity():
         n2 = rho2/q2
         #print(np.where((n1>0), n1, 0.))
         #print(n1)
-        l = 2*np.sum(rho1/q1*rho2/q2)*dV
+        l = 2*np.sum(n1*n2)*dV
         #print('llllllllllllllllllllll ', l, np.sum(n1*n2), np.sum(n1*n1),np.sum(n2*n2))
         lumi.append(l)
     return lumi
@@ -109,7 +112,7 @@ def luminosity():
 def disruption():
     series = io.Series("diags/diag1/openpmd_%T.bp",io.Access.read_only) 
     iterations = np.asarray(series.iterations)
-    D1, D2 = [], []
+    YZ1_AVE, YZ1_STD, YZ2_AVE, YZ2_STD = [], [], [], []
     for n,ts in enumerate(iterations):
         it = series.iterations[ts]
         
@@ -124,21 +127,26 @@ def disruption():
 
         series.flush()
         
-        y1_ave = np.average(y1, weights=w1)
-        y2_ave = np.average(y2, weights=w2)
-
-
-        y1_std = np.sqrt(np.average((y1-y1_ave)**2, weights=w1)) 
-        y2_std = np.sqrt(np.average((y2-y2_ave)**2, weights=w2))
+        yz1 = np.sqrt((y1-ymin)**2+(z1-zmin)**2)
+        yz2 = np.sqrt((y2-ymin)**2+(z2-zmin)**2)
         
-        D1.append(y1_std)
-        D2.append(y2_std)
+        
+        yz1_ave = np.average(yz1, weights=w1)
+        yz2_ave = np.average(yz2, weights=w2)
 
-    return D1, D2
-      
+        yz1_std = np.sqrt(np.average((yz1-yz1_ave)**2, weights=w1)) 
+        yz2_std = np.sqrt(np.average((yz2-yz2_ave)**2, weights=w2))
+                
+        YZ1_AVE.append(yz1_ave)
+        YZ1_STD.append(yz1_std)
+        
+        YZ2_AVE.append(yz2_ave)
+        YZ2_STD.append(yz2_std)
+        
+    return np.asarray([YZ1_AVE,YZ1_STD,YZ2_AVE,YZ2_STD]) 
 
     
-
+'''
 print('chi of electrons ----------------------------------------')
 print('theory:', chi(u1x, u1y, u1z))
 
@@ -157,15 +165,17 @@ print('ColliderRelevant diag = ', chimin)
 fname='diags/reducedfiles/ColliderRelevant_beam_e_beam_p.txt'
 chiave = np.loadtxt(fname)[:,11]
 print('ColliderRelevant diag = ', chiave)
+'''
 
 
+print('-------------------------')
 print('luminosity')
 
 
 print('from PIC data', luminosity())
 
-fname='diags/reducedfiles/ColliderRelevant_beam_e_beam_p.txt'
-lum = np.loadtxt(fname)[:,2]
+CollDiagFname='diags/reducedfiles/ColliderRelevant_beam_e_beam_p.txt'
+lum = np.loadtxt(CollDiagFname)[:,2]
 print('ColliderRelevant diag = ', lum)
 
 
@@ -175,16 +185,24 @@ print('theory from input', 2.*n1*n2*Lx*Ly*Lz)
 
 
 
-
-print('distruption')
-print('from PIC data', disruption())
-
-D1diag = np.loadtxt(fname)[:,9]
-print('ColliderRelevant diag ele = ', D1diag)
+print('-------------------------')
+print('yz1 ave')
+print('from PIC data', disruption()[0])
+print('ColliderRelevant diag ele = ',  np.loadtxt(CollDiagFname)[:,8])
 
 
-D2diag = np.loadtxt(fname)[:,4]
-print('ColliderRelevant diag pos = ', D2diag)
+print('-------------------------')
+print('yz1 std')
+print('from PIC data', disruption()[1])
+print('ColliderRelevant diag ele = ',  np.loadtxt(CollDiagFname)[:,9])
+
+
+
+print('disruption')
+print('from PIC data', disruption()[1]/disruption()[0])
+print('ColliderRelevant diag ele = ',  np.loadtxt(CollDiagFname)[:,9]/np.loadtxt(CollDiagFname)[:,8])
+
+
 
 
 
