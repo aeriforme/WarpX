@@ -117,26 +117,27 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
                 // only beam species does
                 if ((species_names[i_s] != m_beam_name[0]) && (species_names[i_s] != m_beam_name[1])) { continue; }
                
-                amrex::AllPrint() << "WHICH SPECIES  " << species_names[i_s] << "\n"; 
+                //amrex::AllPrint() << "WHICH SPECIES  " << species_names[i_s] << "\n"; 
 
                 // get WarpXParticleContainer class object
                 auto const &myspc = mypc.GetParticleContainer(i_s);
-#if defined(WARPX_DIM_3D)
-                add_diag("yz_ave_"+species_names[i_s], "yz_ave_"+species_names[i_s]+"(m)");
-                add_diag("yz_std_"+species_names[i_s], "yz_std_"+species_names[i_s]+"(m)");
-#endif
+
+//#if defined(WARPX_DIM_3D)
+//               add_diag("yz_ave_"+species_names[i_s], "yz_ave_"+species_names[i_s]+"(m)");
+//               add_diag("yz_std_"+species_names[i_s], "yz_std_"+species_names[i_s]+"(m)");
+//#endif
                 if (myspc.DoQED()){
-                    amrex::AllPrint() << "STO FACENDO HEADER  " << species_names[i_s] << "\n"; 
+                    //amrex::AllPrint() << "STO FACENDO HEADER  " << species_names[i_s] << "\n"; 
                     add_diag("chimin_"+species_names[i_s], "chimin_"+species_names[i_s]+"()");
                     add_diag("chiave_"+species_names[i_s], "chiave_"+species_names[i_s]+"()");
                     add_diag("chimax_"+species_names[i_s], "chimax_"+species_names[i_s]+"()");
                 }
             }    
             m_data.resize(all_diag_names.size());
-            amrex::AllPrint() << "AIUTOOOOOO " << all_diag_names.size() << "\n"; 
+            //amrex::AllPrint() << "AIUTOOOOOO " << all_diag_names.size() << "\n"; 
             for (const auto& name : all_diag_names){
                 const auto& el = m_headers_indices[name];
-                amrex::AllPrint() << "AIUTOOOOOO2 " << el.idx << " " << off << " " << name << "\n"; 
+                //amrex::AllPrint() << "AIUTOOOOOO2 " << el.idx << " " << off << " " << name << "\n"; 
                 ofs << m_sep << "[" << el.idx + off << "]" << el.header;
             }
             ofs << std::endl;
@@ -223,8 +224,8 @@ void ColliderRelevant::ComputeDiags (int step)
     Real ymin = geom.ProbLo(1); // Lower corner of the physical
     Real zmin = geom.ProbLo(2); // Lower corner of the physical
 
-    amrex::AllPrint() << "DOMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIN " << ymin << " " << zmin << std::endl;
-
+    //amrex::AllPrint() << "DOMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIN " << ymin << " " << zmin << std::endl;
+/*
 #if defined(WARPX_DIM_3D)
 
         // yz_ave 
@@ -252,7 +253,7 @@ void ColliderRelevant::ComputeDiags (int step)
         m_data[get_idx("yz_std_"+species_names[i_s])] = yz_std;
 
 #endif
-
+*/
 #if (defined WARPX_QED)
         // get number of level (int)
         const auto level_number = WarpX::GetInstance().finestLevel();
@@ -360,12 +361,12 @@ void ColliderRelevant::ComputeDiags (int step)
                     chimin[lev] = get<0>(reduce_data.value());
                     chimax[lev] = get<1>(reduce_data.value());
                     chiave[lev] = get<2>(reduce_data.value());
-                    amrex::AllPrint() << "CHIAVE_F " <<  chiave[lev]<< "   \n"; 
+                    //amrex::AllPrint() << "CHIAVE_F " <<  chiave[lev]<< "   \n"; 
                 }
                 chimin_f = *std::min_element(chimin.begin(), chimin.end());
                 chimax_f = *std::max_element(chimax.begin(), chimax.end());
                 chiave_f = std::accumulate(chiave.begin(), chiave.end(), 0.0);
-                amrex::AllPrint() << "CHIAVE_F " << chiave_f<< " " << chiave[0] <<  "   \n"; 
+                //amrex::AllPrint() << "CHIAVE_F " << chiave_f<< " " << chiave[0] <<  "   \n"; 
 
             }
             ParallelDescriptor::ReduceRealMin(chimin_f);
