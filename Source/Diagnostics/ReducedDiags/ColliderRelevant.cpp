@@ -13,23 +13,41 @@
 #include "Particles/Gather/FieldGather.H"
 #include "Particles/Gather/GetExternalFields.H"
 #include "Particles/MultiParticleContainer.H"
+#include "Particles/Pusher/GetAndSetPosition.H"
+#include "Particles/SpeciesPhysicalProperties.H"
 #include "Particles/WarpXParticleContainer.H"
 #include "Utils/WarpXConst.H"
 #include "Utils/TextMsg.H"
 #include "WarpX.H"
-#include <ablastr/coarsen/sample.H>
 
+#include <AMReX_Algorithm.H>
+#include <AMReX_Array.H>
+#include <AMReX_Array4.H>
+#include <AMReX_Box.H>
+#include <AMReX_Dim3.H>
+#include <AMReX_Extension.H>
+#include <AMReX_FArrayBox.H>
+#include <AMReX_FabArray.H>
 #include <AMReX_GpuQualifiers.H>
+#include <AMReX_IndexType.H>
+#include <AMReX_IntVect.H>
+#include <AMReX_MultiFab.H>
 #include <AMReX_PODVector.H>
+#include <AMReX_ParIter.H>
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_ParticleReduce.H>
 #include <AMReX_Particles.H>
-#include <AMReX_REAL.H>
-#include <AMReX_Tuple.H>
 #include <AMReX_Print.H>
+#include <AMReX_REAL.H>
+#include <AMReX_Reduce.H>
+#include <AMReX_Tuple.H>
+#include <AMReX_Vector.H>
+
+#include <ablastr/coarsen/sample.H>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -42,7 +60,7 @@ using namespace amrex;
 ColliderRelevant::ColliderRelevant (std::string rd_name)
 : ReducedDiags{rd_name}
 {
-    // read beam name COLLIDING SPECIES: MUST BE TWO 
+    // read colliding species names - must be 2 
     ParmParse pp_rd_name(rd_name);
     pp_rd_name.getarr("species", m_beam_name);
 
@@ -51,8 +69,11 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
         "Collider-relevant diagnostic must involve exactly two species"
     );
 
+    // get WarpX class object
+    auto & warpx = WarpX::GetInstance();
+    
     // get MultiParticleContainer class object
-    const auto & mypc =  WarpX::GetInstance().GetPartContainer();
+    const auto & mypc =  warpx.GetPartContainer();
 
     // get number of species (int)
     const auto nSpecies = mypc.nSpecies();
@@ -71,14 +92,16 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
 
         auto is_photon = myspc.AmIA<PhysicalSpecies::photon>();
         
+        // photon number density is not available yet 
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
             ~is_photon,
-            "Collider-relevant diagnostic does not work for colliding photons"
+            "Collider-relevant diagnostic does not work for colliding photons yet"
         );
     }
 
     auto all_diag_names = std::vector<std::string>{};
-    auto add_diag = [&, c = 0](const std::string &name, const std::string &header) mutable {
+    auto add_diag = [&,c=0](
+        const std::string& name, const std::string& header) mutable {
         m_headers_indices[name] = aux_header_index{header, c++};
         all_diag_names.push_back(name);
     };
@@ -91,58 +114,49 @@ ColliderRelevant::ColliderRelevant (std::string rd_name)
     add_diag("lumi", "lumi(s^-1)");
 #endif
 
-    // luminosity, chimin1, chiave1, chimax1, chimin2, chiave2, chimax2
-//    m_data.resize(1+2*nSpecies, 0.0_rt);
-//#if defined(WARPX_DIM_3D)
-//    m_data.resize(1+2*nSpecies, 0.0_rt);
-//#endif
 
-    if (ParallelDescriptor::IOProcessor())
+    // loop over species
+    for (int i_s = 0; i_s < nSpecies; ++i_s)
     {
-        if ( m_IsNotRestart )
+        // only beam species does
+        if ((species_names[i_s] != m_beam_name[0]) && (species_names[i_s] != m_beam_name[1])) { continue; }
+
+        // get WarpXParticleContainer class object
+        auto const &myspc = mypc.GetParticleContainer(i_s);
+        
+        if (myspc.DoQED()){
+            //amrex::AllPrint() << "STO FACENDO HEADER  " << species_names[i_s] << "\n"; 
+            add_diag("chimin_"+species_names[i_s], "chimin_"+species_names[i_s]+"()");
+            add_diag("chiave_"+species_names[i_s], "chiave_"+species_names[i_s]+"()");
+            add_diag("chimax_"+species_names[i_s], "chimax_"+species_names[i_s]+"()");
+        }        
+        m_data.resize(all_diag_names.size());
+
+        if (ParallelDescriptor::IOProcessor())
         {
-            // open file
-            std::ofstream ofs{m_path + m_rd_name + "." + m_extension, std::ofstream::out};
-            // write header row
-            int off = 0;
-            ofs << "#";
-            ofs << "[" << off++ << "]step()";
-            ofs << m_sep;
-            ofs << "[" << off++ << "]time(s)";
-            ofs << m_sep;
-
-            // loop over species
-            for (int i_s = 0; i_s < nSpecies; ++i_s)
+            if ( m_IsNotRestart )
             {
-                // only beam species does
-                if ((species_names[i_s] != m_beam_name[0]) && (species_names[i_s] != m_beam_name[1])) { continue; }
-               
-                //amrex::AllPrint() << "WHICH SPECIES  " << species_names[i_s] << "\n"; 
-
-                // get WarpXParticleContainer class object
-                auto const &myspc = mypc.GetParticleContainer(i_s);
-
-//#if defined(WARPX_DIM_3D)
-//               add_diag("yz_ave_"+species_names[i_s], "yz_ave_"+species_names[i_s]+"(m)");
-//               add_diag("yz_std_"+species_names[i_s], "yz_std_"+species_names[i_s]+"(m)");
-//#endif
-                if (myspc.DoQED()){
-                    //amrex::AllPrint() << "STO FACENDO HEADER  " << species_names[i_s] << "\n"; 
-                    add_diag("chimin_"+species_names[i_s], "chimin_"+species_names[i_s]+"()");
-                    add_diag("chiave_"+species_names[i_s], "chiave_"+species_names[i_s]+"()");
-                    add_diag("chimax_"+species_names[i_s], "chimax_"+species_names[i_s]+"()");
+                // open file
+                std::ofstream ofs;
+                ofs.open(m_path + m_rd_name + "." + m_extension, 
+                    std::ofstream::out | std::ofstream::app);
+                // write header row
+                int off = 0;
+                ofs << "#";
+                ofs << "[" << off++ << "]step()";
+                ofs << m_sep;
+                ofs << "[" << off++ << "]time(s)";
+                ofs << m_sep;
+                //amrex::AllPrint() << "AIUTOOOOOO " << all_diag_names.size() << "\n"; 
+                for (const auto& name : all_diag_names){
+                    const auto& el = m_headers_indices[name];
+                    //amrex::AllPrint() << "AIUTOOOOOO2 " << el.idx << " " << off << " " << name << "\n"; 
+                    ofs << m_sep << "[" << el.idx + off << "]" << el.header;
                 }
-            }    
-            m_data.resize(all_diag_names.size());
-            //amrex::AllPrint() << "AIUTOOOOOO " << all_diag_names.size() << "\n"; 
-            for (const auto& name : all_diag_names){
-                const auto& el = m_headers_indices[name];
-                //amrex::AllPrint() << "AIUTOOOOOO2 " << el.idx << " " << off << " " << name << "\n"; 
-                ofs << m_sep << "[" << el.idx + off << "]" << el.header;
+                ofs << std::endl;
+               // close file
+                ofs.close();
             }
-            ofs << std::endl;
-            // close file
-            ofs.close();
         }
     }
 }
@@ -180,6 +194,7 @@ void ColliderRelevant::ComputeDiags (int step)
 #endif
 
     const auto get_idx = [&](const std::string& name){
+        //amrex::AllPrint()<< "name" << name << "\n";
         return m_headers_indices.at(name).idx;
     };
 
@@ -372,6 +387,10 @@ void ColliderRelevant::ComputeDiags (int step)
             ParallelDescriptor::ReduceRealMin(chimin_f);
             ParallelDescriptor::ReduceRealMax(chimax_f);
             ParallelDescriptor::ReduceRealSum(chiave_f);
+
+            //amrex::AllPrint() << "IDX " << get_idx("chimin_"+species_names[i_s])<<  " \n"; 
+            //amrex::AllPrint() << "mdata size " << m_data.size()  <<  " \n"; 
+            //amrex::AllPrint() << "mdata1 " << m_data[1]  <<  " \n"; 
 
             m_data[get_idx("chimin_"+species_names[i_s])] = chimin_f;
             m_data[get_idx("chiave_"+species_names[i_s])] = chiave_f/wtot;
