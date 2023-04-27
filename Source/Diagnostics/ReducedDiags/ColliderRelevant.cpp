@@ -177,9 +177,6 @@ void ColliderRelevant::ComputeDiags (int step)
     // get species names (std::vector<std::string>)
     auto const species_names = mypc.GetSpeciesNames();
 
-    // inverse of speed of light squared
-    Real constexpr inv_c2 = 1.0_rt / (PhysConst::c * PhysConst::c);
-
     // get a reference to WarpX instance
     auto & warpx = WarpX::GetInstance();
 
@@ -411,7 +408,7 @@ void ColliderRelevant::ComputeDiags (int step)
 
     auto const n1_dot_n2 = amrex::MultiFab::Dot( mf_dst1, 0, mf_dst2, 0, 1, 0);    
     // (1 - cos phi ) = 2
-    auto const lumi = 2. * n1_dot_n2 * dV; 
+    auto const lumi = 2. * PhysConst::c * n1_dot_n2 * dV; 
 
     //auto const n1_sq = amrex::MultiFab::Dot( *n1, 0, *n1, 0, 1, 0); 
 
