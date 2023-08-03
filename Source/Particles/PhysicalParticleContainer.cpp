@@ -236,7 +236,7 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
 {
     BackwardCompatibility();
 
-    plasma_injector = std::make_unique<PlasmaInjector>(species_id, species_name);
+    plasma_injector = std::make_unique<PlasmaInjector>(species_id, species_name, amr_core->Geom(0));
     physical_species = plasma_injector->getPhysicalSpecies();
     charge = plasma_injector->getCharge();
     mass = plasma_injector->getMass();
@@ -2059,10 +2059,12 @@ PhysicalParticleContainer::Evolve (int lev,
                 // Gather and push for particles not in the buffer
                 //
                 WARPX_PROFILE_VAR_START(blp_fg);
+                const auto np_to_push = np_gather;
+                const auto gather_lev = lev;
                 PushPX(pti, exfab, eyfab, ezfab,
                        bxfab, byfab, bzfab,
                        Ex.nGrowVect(), e_is_nodal,
-                       0, np_gather, lev, lev, dt, ScaleFields(false), a_dt_type);
+                       0, np_to_push, lev, gather_lev, dt, ScaleFields(false), a_dt_type);
 
                 if (np_gather < np)
                 {
@@ -2103,7 +2105,7 @@ PhysicalParticleContainer::Evolve (int lev,
                 WARPX_PROFILE_VAR_STOP(blp_fg);
 
                 // Current Deposition
-                if (skip_deposition == false)
+                if (!skip_deposition)
                 {
                     // Deposit at t_{n+1/2}
                     const amrex::Real relative_time = -0.5_rt * dt;
@@ -2897,13 +2899,13 @@ PhysicalParticleContainer::getIonizationFunc (const WarpXParIter& pti,
 {
     WARPX_PROFILE("PhysicalParticleContainer::getIonizationFunc()");
 
-    return IonizationFilterFunc(pti, lev, ngEB, Ex, Ey, Ez, Bx, By, Bz,
+    return {pti, lev, ngEB, Ex, Ey, Ez, Bx, By, Bz,
                                 ionization_energies.dataPtr(),
                                 adk_prefactor.dataPtr(),
                                 adk_exp_prefactor.dataPtr(),
                                 adk_power.dataPtr(),
                                 particle_icomps["ionizationLevel"],
-                                ion_atomic_number);
+                                ion_atomic_number};
 }
 
 PlasmaInjector* PhysicalParticleContainer::GetPlasmaInjector ()

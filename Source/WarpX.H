@@ -83,9 +83,15 @@ public:
     friend class PML;
 
     static WarpX& GetInstance ();
+
     static void ResetInstance ();
 
-    WarpX ();
+    /**
+     * \brief
+     * This method has to be called at the end of the simulation. It deletes the WarpX instance.
+     */
+    static void Finalize();
+
     ~WarpX ();
 
     static std::string Version (); //!< Version of WarpX executable
@@ -108,8 +114,6 @@ public:
                          int num_shift, int dir, const int lev, bool update_cost_flag,
                          amrex::Real external_field=0.0, bool useparser = false,
                          amrex::ParserExecutor<3> const& field_parser={});
-
-    static void GotoNextLine (std::istream& is);
 
     //! Author of an input file / simulation setup
     static std::string authors;
@@ -1118,6 +1122,20 @@ protected:
 
 private:
 
+    /**
+     * \brief
+     *  WarpX constructor. This method should not be called directly, but rather through
+     * the static member function MakeWarpX(). MakeWarpX() is called by GetInstance ()
+     * if an instance of the WarpX class does not currently exist.
+     */
+    WarpX ();
+
+    /**
+     * \brief
+     * This method creates a new instance of the WarpX class.
+     */
+    static void MakeWarpX ();
+
     // Singleton is used when the code is run from python
     static WarpX* m_instance;
 
@@ -1239,12 +1257,6 @@ private:
      * for all available MultiFabs, and abort otherwise.
      */
     void CheckGuardCells();
-
-    /**
-     * \brief Check that the number of guard cells is smaller than the number of valid cells,
-     * for a given MultiFab, and abort otherwise.
-     */
-    void CheckGuardCells(amrex::MultiFab const& mf);
 
     /**
      * \brief Checks for known numerical issues involving different WarpX modules
