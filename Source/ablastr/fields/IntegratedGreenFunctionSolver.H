@@ -54,7 +54,10 @@ namespace ablastr::fields
      * @param[in] x x-coordinate of given location
      * @param[in] y y-coordinate of given location
      * @param[in] z z-coordinate of given location
-     *
+     * @param[in] dx cell size along x 
+     * @param[in] dy cell size along y 
+     * @param[in] dz cell size along z 
+     * 
      * @return the sum of integrated Green function G
      */
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
