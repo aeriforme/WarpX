@@ -230,9 +230,11 @@ ExternalFieldReader::ExternalFieldReader (std::string const& read_fields_from_pa
                  m_external_field_view.dx[2] = amrex::Real(d.at(2)));
 
     const auto offset = F.gridGlobalOffset();
-    AMREX_D_TERM(m_external_field_view.offset[0] = amrex::Real(offset.at(0));,
-                 m_external_field_view.offset[1] = amrex::Real(offset.at(1));,
-                 m_external_field_view.offset[2] = amrex::Real(offset.at(2)));
+    const auto position = FC.getAttribute("position").get<std::vector<double>>();
+
+    AMREX_D_TERM(m_external_field_view.offset[0] = amrex::Real(offset.at(0)+position.at(0));,
+                 m_external_field_view.offset[1] = amrex::Real(offset.at(1)+position.at(1));,
+                 m_external_field_view.offset[2] = amrex::Real(offset.at(2)+position.at(2)));
 
     // Load the first component if F_component is empty
     auto FC = F_component.empty() ? F.begin()->second : F[F_component];
