@@ -52,6 +52,7 @@ This section documents quick-start guides for a selection of supercomputers that
    hpc/pitzer
    hpc/polaris
    hpc/dane
+   hpc/submit
    hpc/summit
    hpc/taurus
    hpc/tuolumne
