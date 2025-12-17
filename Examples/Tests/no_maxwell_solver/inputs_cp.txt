@@ -1,0 +1,87 @@
+#################################
+########## MY CONSTANTS #########
+#################################
+my_constants.nano  = 1.e-9
+my_constants.micro = 1.e-6
+my_constants.milli = 1.e-3
+my_constants.hbar  = 1.0545718176461565e-34
+
+# ELECTRON BEAM
+my_constants.beam_energy     = 5e12 * q_e
+my_constants.beam_gamma      = beam_energy/(m_e*clight**2)
+my_constants.beam_npart      = 1.2e9
+my_constants.beam_nmacropart = 1e2
+my_constants.beam_charge     = q_e*beam_npart
+my_constants.beam_emit_n     = 235*nano # normalized emittance
+my_constants.beam_emit       = beam_emit_n / beam_gamma
+my_constants.beam_beta       = 0.1*milli # beta star
+my_constants.beam_sigma0     = sqrt( beam_emit * beam_beta )  # sigma star
+my_constants.beam_sigmaz     = 8.5*micro
+my_constants.beam_momspread  = beam_emit_n / beam_sigma0
+my_constants.beam_espread    = 0.
+my_constants.beam_dfocus     = abs(beam_z0-z_focus)
+my_constants.beam_z0         = - 4*laser_sigmaz - d_cp2ip
+
+# LASER PULSE
+my_constants.photon_energy      = 2.5 * q_e
+my_constants.photon_energy_norm = photon_energy / (m_e * clight**2)
+my_constants.laser_sigmaz       = 4800 * micro # ctau
+my_constants.laser_tau          = laser_sigmaz / clight
+my_constants.laser_a0           = 0.34
+my_constants.laser_omega        = photon_energy / hbar
+my_constants.laser_wavelength   = 2*pi*clight / laser_omega
+my_constants.laser_sigma0       = 20 * laser_wavelength
+my_constants.laser_E0           = laser_a0 * m_e * laser_omega * clight / q_e
+my_constants.laser_intensity    = 0.5 * clight * epsilon0 * laser_E0**2
+my_constants.laser_power        = laser_intensity * laser_sigma0**2 *  2*pi
+my_constants.laser_energy       = laser_power * laser_tau * sqrt(2*pi)
+my_constants.laser_npart        = laser_energy / photon_energy
+my_constants.laser_rayleigh     = 4*pi * laser_sigma0**2 / laser_wavelength
+my_constants.laser_theta        = laser_wavelength / (2*pi*laser_sigma0)
+my_constants.laser_z0           = 4*laser_sigmaz - d_cp2ip
+my_constants.laser_dfocus       = abs(laser_z0-z_focus)
+my_constants.laser_nmacropart   = 1e2
+my_constants.laser_momspread    = photon_energy_norm * laser_theta
+
+# BOX
+my_constants.d_cp2ip = 2*laser_sigmaz + 6*beam_sigmaz
+my_constants.z_focus = 0. - d_cp2ip # z CP
+my_constants.Lx      = 20*beam_sigma0
+my_constants.Ly      = 20*beam_sigma0
+my_constants.zmin    = - d_cp2ip - 4*laser_sigmaz - 4*beam_sigmaz
+my_constants.zmax    = - d_cp2ip + 8*laser_sigmaz
+my_constants.Lz      = 40*beam_sigmaz # zmax - zmin
+my_constants.nx      = 64
+my_constants.ny      = 64
+my_constants.nz      = 64
+
+# TIME
+my_constants.T  = 0.5*Lz/clight
+my_constants.dt = T/nz
+
+#################################
+####### GENERAL PARAMETERS ######
+#################################
+stop_time = T
+amr.n_cell = nx ny nz
+geometry.dims = 3
+geometry.prob_lo = -0.5*Lx -0.5*Ly -0.5*Lz #zmin
+geometry.prob_hi =  0.5*Lx  0.5*Ly  0.5*Lz #zmax
+amr.max_level = 1
+amr.ref_ratio_vect = 4 4 4
+warpx.fine_tag_lo = -4*beam_sigma0 -4*beam_sigma0  -4*beam_sigmaz #(-d_cp2ip-4*beam_sigmaz)
+warpx.fine_tag_hi =  4*beam_sigma0  4*beam_sigma0   4*beam_sigmaz #(-d_cp2ip+4*beam_sigmaz)
+warpx.const_dt = dt
+
+#################################
+######## BOUNDARY CONDITION #####
+#################################
+boundary.particle_lo = Absorbing Absorbing Absorbing
+boundary.particle_hi = Absorbing Absorbing Absorbing
+
+################
+### NUMERICS ###
+################
+algo.maxwell_solver = none
+algo.particle_pusher = vay
+algo.particle_shape = 3

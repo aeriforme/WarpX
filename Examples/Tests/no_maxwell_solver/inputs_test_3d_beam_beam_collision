@@ -1,0 +1,92 @@
+#################################
+########## MY CONSTANTS #########
+#################################
+
+# BEAMS
+my_constants.energy     = 5e12*q_e
+my_constants.gamma      = energy/(m_e*clight*clight)
+my_constants.npart      = 1.5e9
+my_constants.sigma0     = 2e-9
+my_constants.sigmaz     = 5e-6
+my_constants.espread    = 0.1/100.*gamma
+my_constants.emit_n     = 240e-9
+my_constants.momspread  = emit_n / sigma0
+my_constants.nmacropart = 1e4
+# BOX
+my_constants.Lx = 20*sigma0
+my_constants.Ly = 20*sigma0
+my_constants.Lz = 40*sigmaz
+
+my_constants.nx = 64
+my_constants.ny = 64
+my_constants.nz = 64
+
+# TIME
+my_constants.T = 0.5*Lz/clight
+my_constants.dt = T / nz
+
+#################################
+####### GENERAL PARAMETERS ######
+#################################
+stop_time = T
+amr.n_cell = nx ny nz
+geometry.dims = 3
+geometry.prob_lo = -0.5*Lx -0.5*Ly -0.5*Lz
+geometry.prob_hi =  0.5*Lx  0.5*Ly  0.5*Lz
+amr.max_level = 1
+amr.ref_ratio_vect = 4 4 4
+warpx.fine_tag_lo = -4*sigma0 -4*sigma0 -4*sigmaz
+warpx.fine_tag_hi =  4*sigma0  4*sigma0  4*sigmaz
+warpx.const_dt = dt
+
+#################################
+######## BOUNDARY CONDITION #####
+#################################
+boundary.particle_lo = Absorbing Absorbing Absorbing
+boundary.particle_hi = Absorbing Absorbing Absorbing
+
+#################################
+############ NUMERICS ###########
+#################################
+algo.maxwell_solver = none
+algo.particle_pusher = vay
+algo.particle_shape = 3
+
+#################################
+########### PARTICLES ###########
+#################################
+particles.species_names = beam
+
+beam.species_type               = electron
+beam.injection_style            = gaussian_beam
+beam.x_rms                      = sigma0
+beam.y_rms                      = sigma0
+beam.z_rms                      = sigmaz
+beam.x_m                        = 0
+beam.y_m                        = 0
+beam.z_m                        = -4*sigmaz
+beam.npart                      = nmacropart
+beam.npart_real                 = npart
+beam.z_cut                      = 4
+beam.focal_distance             = 4*sigmaz
+beam.momentum_distribution_type = gaussian
+beam.uz_m                       = gamma
+beam.uy_m                       = 0.0
+beam.ux_m                       = 0.0
+beam.ux_th                      = momspread
+beam.uy_th                      = momspread
+beam.uz_th                      = espread
+
+#################################
+######### DIAGNOSTICS ###########
+#################################
+# FULL
+diagnostics.diags_names = diag1
+
+diag1.intervals = 1
+diag1.diag_type = Full
+diag1.write_species = 1
+diag1.fields_to_plot = none
+diag1.format = openpmd
+diag1.dump_last_timestep = 1
+diag1.species = beam
