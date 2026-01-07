@@ -1642,8 +1642,13 @@ void PhysicalParticleContainer::resample (const amrex::Vector<amrex::Geometry>& 
     if (m_resampler.triggered(timestep, global_numparts))
     {
         Redistribute();
-        for (int lev = 0; lev <= maxLevel(); lev++)
-        {
+        const int finest_lev = finestLevel();
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            static_cast<int>(geom.size()) > finest_lev,
+            "Geometry vector does not have enough levels for resampling. "
+            "This may occur when maxwell_solver=none. Ensure geometry is properly initialized for all refinement levels."
+        );
+        for (int lev = 0; lev <= finest_lev; lev++)        {
             for (WarpXParIter pti(*this, lev); pti.isValid(); ++pti)
             {
                 m_resampler(geom[lev], pti, lev, this);

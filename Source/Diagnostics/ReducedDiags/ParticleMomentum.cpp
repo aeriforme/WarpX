@@ -45,7 +45,7 @@ ParticleMomentum::ParticleMomentum (const std::string& rd_name)
     const int nSpecies = mypc.nSpecies();
 
     // Resize data array
-    m_data.resize(6*nSpecies+6, 0.0_rt);
+    m_data.resize(9*nSpecies+6, 0.0_rt);
 
     // Get species names
     const std::vector<std::string> species_names = mypc.GetSpeciesNames();
@@ -106,6 +106,19 @@ ParticleMomentum::ParticleMomentum (const std::string& rd_name)
                 ofs << "[" << c++ << "]";
                 ofs << species_names[i] + "_mean_z(kg*m/s)";
             }
+                
+            for (int i = 0; i < nSpecies; ++i)
+            {
+                ofs << m_sep;
+                ofs << "[" << c++ << "]";
+                ofs << species_names[i] + "_sq_mean_x((kg*m/s)^2)";
+                ofs << m_sep;
+                ofs << "[" << c++ << "]";
+                ofs << species_names[i] + "_sq_mean_y((kg*m/s)^2)";
+                ofs << m_sep;
+                ofs << "[" << c++ << "]";
+                ofs << species_names[i] + "_sq_mean_z((kg*m/s)^2)";
+            }
 
             ofs << "\n";
             ofs.close();
@@ -142,16 +155,19 @@ void ParticleMomentum::ComputeDiags (int step)
         // Use amrex::ParticleReduce to compute the sum of the momenta and weights of all particles
         // held by the current MPI rank for this species (loop over all boxes held by this MPI rank):
         // the result r is the tuple (Px, Py, Pz, Ws)
-        amrex::ReduceOps<ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum> reduce_ops;
-        auto r = amrex::ParticleReduce<amrex::ReduceData<Real, Real, Real, Real>>(
+        amrex::ReduceOps<ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum> reduce_ops;
+        auto r = amrex::ParticleReduce<amrex::ReduceData<Real, Real, Real, Real, Real, Real, Real>>(
             myspc,
-            [=] AMREX_GPU_DEVICE(const PType& p) noexcept -> amrex::GpuTuple<Real, Real, Real, Real>
+            [=] AMREX_GPU_DEVICE(const PType& p) noexcept -> amrex::GpuTuple<Real, Real, Real, Real, Real, Real, Real>
             {
                 const amrex::Real w  = p.rdata(PIdx::w);
                 const amrex::Real ux = p.rdata(PIdx::ux);
                 const amrex::Real uy = p.rdata(PIdx::uy);
                 const amrex::Real uz = p.rdata(PIdx::uz);
-                return {w*m*ux, w*m*uy, w*m*uz, w};
+                const amrex::Real px = m*ux;
+                const amrex::Real py = m*uy;
+                const amrex::Real pz = m*uz;
+                return {w*px, w*py, w*pz, w, w*px*px, w*py*py, w*pz*pz};
             },
             reduce_ops);
 
@@ -159,9 +175,12 @@ void ParticleMomentum::ComputeDiags (int step)
         amrex::Real Py = amrex::get<1>(r);
         amrex::Real Pz = amrex::get<2>(r);
         amrex::Real Ws = amrex::get<3>(r);
+        amrex::Real Px_sq = amrex::get<4>(r);
+        amrex::Real Py_sq = amrex::get<5>(r);
+        amrex::Real Pz_sq = amrex::get<6>(r);
 
         // Reduced sum over MPI ranks
-        ParallelDescriptor::ReduceRealSum({Px,Py,Pz,Ws}, ParallelDescriptor::IOProcessorNumber());
+        ParallelDescriptor::ReduceRealSum({Px,Py,Pz,Ws,Px_sq,Py_sq,Pz_sq}, ParallelDescriptor::IOProcessorNumber());
 
         // Accumulate sum of weights over all species (must come after MPI reduction of Ws)
         Wtot += Ws;
@@ -192,7 +211,21 @@ void ParticleMomentum::ComputeDiags (int step)
         {
             m_data[offset_mean_species+0] = 0.0_rt;
             m_data[offset_mean_species+1] = 0.0_rt;
-            m_data[offset_mean_species+2] = 0.0_rt;
+            m_data[offset_mean_species+2] = 0.0_rt;       
+        }
+
+        const int offset_sq_mean_species = nSpecies*3 + 3 + nSpecies*3 + 3 + i_s*3;
+        if (Ws > std::numeric_limits<Real>::min())
+        {
+            m_data[offset_sq_mean_species+0] = Px_sq / Ws;
+            m_data[offset_sq_mean_species+1] = Py_sq / Ws;
+            m_data[offset_sq_mean_species+2] = Pz_sq / Ws;
+        }
+        else
+        {
+            m_data[offset_sq_mean_species+0] = 0.0_rt;
+            m_data[offset_sq_mean_species+1] = 0.0_rt;
+            m_data[offset_sq_mean_species+2] = 0.0_rt;       
         }
     }
 

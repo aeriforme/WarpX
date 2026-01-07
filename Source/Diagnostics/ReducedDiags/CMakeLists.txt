@@ -27,5 +27,6 @@ foreach(D IN LISTS WarpX_DIMS)
         ReducedDiags.cpp
         RhoMaximum.cpp
         Timestep.cpp
+        Temperature.cpp
     )
 endforeach()
