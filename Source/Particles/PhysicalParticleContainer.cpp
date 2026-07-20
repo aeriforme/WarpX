@@ -67,7 +67,6 @@
 #include <AMReX_GpuBuffer.H>
 #include <AMReX_GpuControl.H>
 #include <AMReX_GpuDevice.H>
-#include <AMReX_GpuElixir.H>
 #include <AMReX_GpuLaunch.H>
 #include <AMReX_GpuQualifiers.H>
 #include <AMReX_INT.H>
@@ -118,8 +117,7 @@ using namespace amrex;
 
 PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int ispecies,
                                                       const std::string& name)
-    : WarpXParticleContainer(amr_core, ispecies),
-      species_name(name)
+    : WarpXParticleContainer(amr_core, ispecies, name)
 {
     BackwardCompatibility();
 
@@ -150,7 +148,7 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
     for (auto const& plasma_injector : plasma_injectors) {
         // For now, use the last value for charge and mass that is found.
         // A check could be added for consistency of multiple values, but it'll probably never be needed
-        charge_from_source |= plasma_injector->queryCharge(charge);
+        charge_from_source |= plasma_injector->queryCharge(m_charge);
         mass_from_source |= plasma_injector->queryMass(m_mass);
     }
 
@@ -161,12 +159,12 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(physical_species_from_string,
             physical_species_s + " does not exist!");
         physical_species = physical_species_from_string.value();
-        charge = species::get_charge( physical_species );
+        m_charge = species::get_charge( physical_species );
         m_mass = species::get_mass( physical_species );
     }
 
     // parse charge and mass (overriding values above)
-    const bool charge_is_specified = utils::parser::queryWithParser(pp_species_name, "charge", charge);
+    const bool charge_is_specified = utils::parser::queryWithParser(pp_species_name, "charge", m_charge);
     const bool mass_is_specified = utils::parser::queryWithParser(pp_species_name, "mass", m_mass);
 
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE (
@@ -218,6 +216,13 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
     pp_species_name.query("do_not_deposit", do_not_deposit);
     pp_species_name.query("do_not_gather", do_not_gather);
     pp_species_name.query("do_not_push", do_not_push);
+
+    if (m_charge == 0._prt) {
+        do_not_deposit = true;
+        if (m_mass > 0._prt) {
+            do_not_gather = true;
+        }
+    }
 
     pp_species_name.query("do_continuous_injection", do_continuous_injection);
     pp_species_name.query("initialize_self_fields", initialize_self_fields);
@@ -390,7 +395,7 @@ PhysicalParticleContainer::AllocData ()
 }
 
 PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core)
-    : WarpXParticleContainer(amr_core, 0)
+    : WarpXParticleContainer(amr_core, 0, "")
 {
 }
 
@@ -423,6 +428,25 @@ PhysicalParticleContainer::BackwardCompatibility ()
         WARPX_ABORT_WITH_MESSAGE(
             "<species>.momentum_distribution_type = radial_expansion is not supported anymore. "
             "Please use momentum_distribution_type = parse_momentum_function instead.");
+    }
+
+    const std::string juttner_drift_msg =
+        "The Maxwell-Juttner bulk drift is now set with the normalized momentum "
+        "<species>.ux_mean/uy_mean/uz_mean (gamma*v/c), optionally selecting between a "
+        "constant and a parser value with "
+        "<species>.maxwell_juttner_u_mean_distribution_type = constant (default) or parser "
+        "(in which case provide <species>.ux_mean_function(x,y,z), uy_mean_function(x,y,z), "
+        "uz_mean_function(x,y,z)).";
+    std::string backward_string;
+    for (const std::string old_param : {"bulk_vel_dir", "beta_distribution_type",
+                                        "beta_function(x,y,z)", "beta"}) {
+        if (pp_species_name.query(old_param, backward_string)) {
+            std::string msg = "<species>.";
+            msg += old_param;
+            msg += " is no longer supported. ";
+            msg += juttner_drift_msg;
+            WARPX_ABORT_WITH_MESSAGE(msg);
+        }
     }
 }
 
@@ -541,15 +565,13 @@ PhysicalParticleContainer::Evolve (ablastr::fields::MultiFabRegister& fields,
             FArrayBox const* byfab = &By[pti];
             FArrayBox const* bzfab = &Bz[pti];
 
-            Elixir exeli, eyeli, ezeli, bxeli, byeli, bzeli;
-
             if (WarpX::use_fdtd_nci_corr)
             {
                 // Filter arrays Ex[pti], store the result in
                 // filtered_Ex and update pointer exfab so that it
                 // points to filtered_Ex (and do the same for all
                 // components of E and B).
-                applyNCIFilter(lev, pti.tilebox(), exeli, eyeli, ezeli, bxeli, byeli, bzeli,
+                applyNCIFilter(lev, pti.tilebox(),
                                filtered_Ex, filtered_Ey, filtered_Ez,
                                filtered_Bx, filtered_By, filtered_Bz,
                                Ex[pti], Ey[pti], Ez[pti], Bx[pti], By[pti], Bz[pti],
@@ -658,7 +680,7 @@ PhysicalParticleContainer::Evolve (ablastr::fields::MultiFabRegister& fields,
                         // filtered_Ex and update pointer cexfab so that it
                         // points to filtered_Ex (and do the same for all
                         // components of E and B)
-                        applyNCIFilter(lev-1, cbox, exeli, eyeli, ezeli, bxeli, byeli, bzeli,
+                        applyNCIFilter(lev-1, cbox,
                                        filtered_Ex, filtered_Ey, filtered_Ez,
                                        filtered_Bx, filtered_By, filtered_Bz,
                                        cEx[pti], cEy[pti], cEz[pti],
@@ -889,8 +911,6 @@ PhysicalParticleContainer::DepositMassMatrices (ablastr::fields::MultiFabRegiste
 void
 PhysicalParticleContainer::applyNCIFilter (
     int lev, const Box& box,
-    Elixir& exeli, Elixir& eyeli, Elixir& ezeli,
-    Elixir& bxeli, Elixir& byeli, Elixir& bzeli,
     FArrayBox& filtered_Ex, FArrayBox& filtered_Ey, FArrayBox& filtered_Ez,
     FArrayBox& filtered_Bx, FArrayBox& filtered_By, FArrayBox& filtered_Bz,
     const FArrayBox& Ex, const FArrayBox& Ey, const FArrayBox& Ez,
@@ -918,9 +938,9 @@ PhysicalParticleContainer::applyNCIFilter (
 #endif
 
     // Filter Ex (Both 2D and 3D)
-    filtered_Ex.resize(amrex::convert(tbox,Ex.box().ixType()));
-    // Safeguard for GPU
-    exeli = filtered_Ex.elixir();
+    // Allocated on the async arena so that the memory of the previous
+    // iteration stays valid until the GPU kernels using it complete
+    filtered_Ex.resize(amrex::convert(tbox,Ex.box().ixType()), 1, amrex::The_Async_Arena());
     // Apply filter on Ex, result stored in filtered_Ex
 
     nci_godfrey_filter_exeybz[lev]->ApplyStencil(filtered_Ex, Ex, filtered_Ex.box());
@@ -928,37 +948,31 @@ PhysicalParticleContainer::applyNCIFilter (
     ex_ptr = &filtered_Ex;
 
     // Filter Ez
-    filtered_Ez.resize(amrex::convert(tbox,Ez.box().ixType()));
-    ezeli = filtered_Ez.elixir();
+    filtered_Ez.resize(amrex::convert(tbox,Ez.box().ixType()), 1, amrex::The_Async_Arena());
     nci_godfrey_filter_bxbyez[lev]->ApplyStencil(filtered_Ez, Ez, filtered_Ez.box());
     ez_ptr = &filtered_Ez;
 
     // Filter By
-    filtered_By.resize(amrex::convert(tbox,By.box().ixType()));
-    byeli = filtered_By.elixir();
+    filtered_By.resize(amrex::convert(tbox,By.box().ixType()), 1, amrex::The_Async_Arena());
     nci_godfrey_filter_bxbyez[lev]->ApplyStencil(filtered_By, By, filtered_By.box());
     by_ptr = &filtered_By;
 #if defined(WARPX_DIM_3D)
     // Filter Ey
-    filtered_Ey.resize(amrex::convert(tbox,Ey.box().ixType()));
-    eyeli = filtered_Ey.elixir();
+    filtered_Ey.resize(amrex::convert(tbox,Ey.box().ixType()), 1, amrex::The_Async_Arena());
     nci_godfrey_filter_exeybz[lev]->ApplyStencil(filtered_Ey, Ey, filtered_Ey.box());
     ey_ptr = &filtered_Ey;
 
     // Filter Bx
-    filtered_Bx.resize(amrex::convert(tbox,Bx.box().ixType()));
-    bxeli = filtered_Bx.elixir();
+    filtered_Bx.resize(amrex::convert(tbox,Bx.box().ixType()), 1, amrex::The_Async_Arena());
     nci_godfrey_filter_bxbyez[lev]->ApplyStencil(filtered_Bx, Bx, filtered_Bx.box());
     bx_ptr = &filtered_Bx;
 
     // Filter Bz
-    filtered_Bz.resize(amrex::convert(tbox,Bz.box().ixType()));
-    bzeli = filtered_Bz.elixir();
+    filtered_Bz.resize(amrex::convert(tbox,Bz.box().ixType()), 1, amrex::The_Async_Arena());
     nci_godfrey_filter_exeybz[lev]->ApplyStencil(filtered_Bz, Bz, filtered_Bz.box());
     bz_ptr = &filtered_Bz;
 #else
-    amrex::ignore_unused(eyeli, bxeli, bzeli,
-        filtered_Ey, filtered_Bx, filtered_Bz,
+    amrex::ignore_unused(filtered_Ey, filtered_Bx, filtered_Bz,
         Ey, Bx, Bz, ey_ptr, bx_ptr, bz_ptr);
 #endif
 }
@@ -1151,7 +1165,7 @@ PhysicalParticleContainer::SplitParticles (int lev)
 
     amrex::Vector<amrex::Vector<ParticleReal>> attr;
     attr.push_back(wp);
-    const amrex::Vector<amrex::Vector<int>> attr_int;
+    const amrex::Vector<amrex::Vector<int>> attr_int{};
     pctmp_split.AddNParticles(lev,
                               np_split_to_add,
                               xp,
@@ -1244,7 +1258,7 @@ PhysicalParticleContainer::PushP (int lev, Real dt,
             }
 
             // Loop over the particles and update their momentum
-            const amrex::ParticleReal q = this->charge;
+            const amrex::ParticleReal q = this->m_charge;
             const amrex::ParticleReal mass = this->m_mass;
 
             const auto pusher_algo = WarpX::particle_pusher_algo;
@@ -1438,7 +1452,7 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
     }
 
     // local copies for device lambda capture
-    const amrex::ParticleReal q = this->charge;
+    const amrex::ParticleReal q = this->m_charge;
     const amrex::ParticleReal mass = this->m_mass;
 
     const auto pusher_algo = WarpX::particle_pusher_algo;
@@ -1447,6 +1461,8 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
     const auto do_sync = m_do_qed_quantum_sync;
     amrex::Real t_chi_max = 0.0;
     if (do_sync) { t_chi_max = m_shr_p_qs_engine->get_minimum_chi_part(); }
+    const amrex::Real qed_dt =
+        (momentum_push_type == MomentumPushType::Full) ? dt : amrex::Real(0.5) * dt;
 
     QuantumSynchrotronEvolveOpticalDepth evolve_opt;
     amrex::ParticleReal* AMREX_RESTRICT p_optical_depth_QSR = nullptr;
@@ -1555,11 +1571,12 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
         [[maybe_unused]] auto foo_local_has_quantum_sync = local_has_quantum_sync;
         [[maybe_unused]] auto *foo_podq = p_optical_depth_QSR;
         [[maybe_unused]] const auto& foo_evolve_opt = evolve_opt; // have to do all these for nvcc
+        [[maybe_unused]] auto foo_qed_dt = qed_dt;
         if constexpr (qed_control == has_qed) {
             if (local_has_quantum_sync) {
                 evolve_opt(ux[ip], uy[ip], uz[ip],
                            Exp, Eyp, Ezp,Bxp, Byp, Bzp,
-                           dt, p_optical_depth_QSR[ip]);
+                           qed_dt, p_optical_depth_QSR[ip]);
             }
         }
 #else
@@ -1573,12 +1590,12 @@ PhysicalParticleContainer::InitIonizationModule ()
 {
     if (!do_field_ionization) { return; }
     const ParmParse pp_species_name(species_name);
-    if (charge != PhysConst::q_e){
+    if (m_charge != PhysConst::q_e){
         ablastr::warn_manager::WMRecordWarning("Species",
             "charge != q_e for ionizable species '" +
             species_name + "':" +
             "overriding user value and setting charge = q_e.");
-        charge = PhysConst::q_e;
+        m_charge = PhysConst::q_e;
     }
     utils::parser::queryWithParser(pp_species_name, "do_adk_correction", do_adk_correction);
 
