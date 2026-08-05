@@ -311,13 +311,14 @@ void DifferentialLuminosity::ComputeDiags (int step)
                     // determine particle bin
                     int const bin = int(Math::floor((E_com-bin_min)/bin_size));
 
-                    if ( bin<0 || bin>=num_bins ) { continue; } // discard if out-of-range
+                    if ( bin>=0 && bin<num_bins ) {
+                        // Scale the number of collisions by multiplying by `min_N`
+                        // to reflect the fact that we only sampled `max_N` pairs
+                        // instead of `NI1*NI2`
+                        Real const dL_dEcom = luminosity / bin_size; // m^-2 eV^-1
 
-                    // Scale the number of collisions by multiplying by `min_N`
-                    // to reflect the fact that we only sampled `max_N` pairs instead of `NI1*NI2`
-                    Real const dL_dEcom = luminosity / bin_size; // m^-2 eV^-1
-
-                    amrex::HostDevice::Atomic::Add(&dptr_data[bin], dL_dEcom);
+                        amrex::HostDevice::Atomic::Add(&dptr_data[bin], dL_dEcom);
+                    }
 
                     if (max_N == NI1) {
                         i_1 += min_N;
