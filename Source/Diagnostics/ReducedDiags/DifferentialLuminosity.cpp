@@ -253,6 +253,7 @@ void DifferentialLuminosity::ComputeDiags (int step)
 
                 // we will start from collision number = coll_idx and then add
                 // stride (smaller set size) until we do all collisions (larger set size)
+                Real total_luminosity = 0.0_rt;
                 for (index_type k = coll_idx; k < max_N; k += min_N)
                 {
                     index_type const j_1 = indices_1[i_1];
@@ -301,9 +302,11 @@ void DifferentialLuminosity::ComputeDiags (int step)
                     // we also use beta=v/c instead of v
 
                     Real const radicand = beta1_sq + beta2_sq - 2*beta1_dot_beta2 - beta1_sq*beta2_sq + beta1_dot_beta2*beta1_dot_beta2;
+                    // Scale the number of collisions by multiplying by `min_N` to reflect
+                    // the fact that we only sampled `max_N` pairs instead of `NI1*NI2`
                     Real const luminosity = PhysConst::c * std::sqrt(amrex::max(radicand, 0.0_rt)) * min_N * w1[j_1] * w2[j_2] / dV * dt;
 
-                    amrex::HostDevice::Atomic::Add(&dptr_data[num_bins], luminosity);
+                    total_luminosity += luminosity;
 
                     // center of mass energy in eV
                     Real const E_com = c_over_qe * std::sqrt(m1*m1*c2 + m2*m2*c2 + 2*(p1t*p2t - p1x*p2x - p1y*p2y - p1z*p2z));
@@ -312,9 +315,6 @@ void DifferentialLuminosity::ComputeDiags (int step)
                     int const bin = int(Math::floor((E_com-bin_min)/bin_size));
 
                     if ( bin>=0 && bin<num_bins ) {
-                        // Scale the number of collisions by multiplying by `min_N`
-                        // to reflect the fact that we only sampled `max_N` pairs
-                        // instead of `NI1*NI2`
                         Real const dL_dEcom = luminosity / bin_size; // m^-2 eV^-1
 
                         amrex::HostDevice::Atomic::Add(&dptr_data[bin], dL_dEcom);
@@ -327,6 +327,7 @@ void DifferentialLuminosity::ComputeDiags (int step)
                         i_2 += min_N;
                     }
                 } // k
+                amrex::HostDevice::Atomic::Add(&dptr_data[num_bins], total_luminosity);
             }); // independent pairs
         } // boxes
     } // levels

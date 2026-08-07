@@ -326,7 +326,8 @@ void DifferentialLuminosity2D::ComputeDiags (int step)
                         // Scale the number of collisions by multiplying by `min_N`
                         // to reflect the fact that we only sampled `max_N` pairs
                         // instead of `NI1*NI2`
-                        Real const d2L_dE1_dE2 = PhysConst::c * std::sqrt( radicand ) * min_N *
+                        Real const d2L_dE1_dE2 = PhysConst::c *
+                            std::sqrt(amrex::max(radicand, 0.0_rt)) * min_N *
                             w1[j_1] * w2[j_2] / (dV * bin_size_1 * bin_size_2) * dt; // m^-2 eV^-2
 
                         amrex::Real &data = d_table(bin_1, bin_2);

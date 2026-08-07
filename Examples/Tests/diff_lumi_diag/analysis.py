@@ -69,7 +69,7 @@ if "leptons" in test_name:
 elif "photons" in test_name:
     # In the photons case, the particles are
     # initialized from a density distribution ;
-    # tolerance is larger due to lower particle statistics
+    # tol1 and tol2 are larger due to lower particle statistics
     tol1 = 0.021
     tol2 = 0.06
     tol3 = 0.0002
