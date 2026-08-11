@@ -97,30 +97,65 @@ namespace {
 
         // s = (E_CM / (2*me*c^2))^2 = (E_star / (me*c^2))^2
         const amrex::ParticleReal s = pow2(2._prt * E_ratio);
-        const amrex::ParticleReal beta = std::sqrt(1._prt - 1._prt / s);
+        const amrex::ParticleReal one_minus_beta2 = 1._prt / s;
+        const amrex::ParticleReal gamma_star = std::sqrt(s);
+        const amrex::ParticleReal max_angular_rapidity = std::acosh(gamma_star);
+        const amrex::ParticleReal beta = std::tanh(max_angular_rapidity);
         const amrex::ParticleReal u = amrex::Random(engine);
-        // initial guess is the isotropic guess
-        amrex::ParticleReal costh = 2._prt * u - 1._prt;
-        amrex::ParticleReal I1 = LBWIntegralOfDifferentialCrossSection(beta, 1._prt);
+        amrex::ParticleReal angular_rapidity =
+            (2._prt * u - 1._prt) * max_angular_rapidity;
+        amrex::ParticleReal lower_bound = -max_angular_rapidity;
+        amrex::ParticleReal upper_bound = max_angular_rapidity;
+        const amrex::ParticleReal I1 = LBWIntegralOfDifferentialCrossSectionTransformed(
+            beta, one_minus_beta2, max_angular_rapidity);
 
         // Inverse transform sampling: draw u ~ Uniform[0,1] and solve CDF(x) = u
-        // for x = cos(theta). Let I(x) = indefinite integral of dsigma/dx.
-        // Since dsigma/dx is even, I(x) is odd so I(-1) = -I(1).
-        // CDF(x) = (I(x) - I(-1)) / (I(1) - I(-1)) = 0.5 + 0.5*I(x)/I(1) = u
-        // Define G(x) = 0.5 + 0.5*I(x)/I(1) - u = 0
-        // Solve for x by Newton-Raphson: x_{n+1} = x_n - G / G'
-        // where G'(x) = 0.5*(dsigma/dx)/I(1)
+        // for x = cos(theta). In order to resolve the forward peaks at high energy,
+        // solve in the transformed coordinate y = atanh(beta*x). Let I(y) be the
+        // indefinite integral of dsigma/dy.
+        // Since dsigma/dy is even, I(y) is odd. Thus, at y_max = atanh(beta),
+        // CDF(y) = 0.5 + 0.5*I(y)/I(y_max). Define
+        // G(y) = 0.5 + 0.5*I(y)/I(y_max) - u = 0.
+        // Use a safeguarded Newton iteration, falling back to bisection if the Newton
+        // update leaves the current bracket.
         for (int iter = 0; iter < 20; ++iter)
         {
-            amrex::ParticleReal I = LBWIntegralOfDifferentialCrossSection(beta, costh);
-            amrex::ParticleReal G = 0.5_prt + 0.5_prt * (I / I1) - u;
-            amrex::ParticleReal G_prime = LBWDifferentialCrossSection(beta, costh) / (2._prt * I1);
-            amrex::ParticleReal delta = G / G_prime;
-            costh -= delta;
-            costh = amrex::max(-1._prt, amrex::min(1._prt, costh));
-            if (amrex::Math::abs(delta) < 1e-12_prt) { break; }
+            const amrex::ParticleReal I = LBWIntegralOfDifferentialCrossSectionTransformed(
+                beta, one_minus_beta2, angular_rapidity);
+            const amrex::ParticleReal G = 0.5_prt + 0.5_prt * (I / I1) - u;
+            if (amrex::Math::abs(G)
+                <= 32._prt * std::numeric_limits<amrex::ParticleReal>::epsilon())
+            {
+                break;
+            }
+
+            if (G < 0._prt)
+            {
+                lower_bound = angular_rapidity;
+            }
+            else
+            {
+                upper_bound = angular_rapidity;
+            }
+
+            const amrex::ParticleReal G_prime =
+                LBWDifferentialCrossSectionTransformed(
+                    beta, one_minus_beta2, angular_rapidity) / (2._prt * I1);
+            const amrex::ParticleReal newton_candidate = angular_rapidity - G / G_prime;
+            if (newton_candidate > lower_bound && newton_candidate < upper_bound
+                && newton_candidate != angular_rapidity)
+            {
+                angular_rapidity = newton_candidate;
+            }
+            else
+            {
+                angular_rapidity = 0.5_prt * (lower_bound + upper_bound);
+            }
         }
-        const amrex::ParticleReal sinth = std::sqrt(1._prt - costh * costh);
+        const amrex::ParticleReal costh = amrex::max(
+            -1._prt, amrex::min(1._prt, std::tanh(angular_rapidity) / beta));
+        const amrex::ParticleReal sinth = std::sqrt(
+            amrex::max(0._prt, 1._prt - costh * costh));
 
         // Sample azimuthal angle uniformly in [0, 2pi)
         const amrex::ParticleReal phi = 2._prt * MathConst::pi * amrex::Random(engine);

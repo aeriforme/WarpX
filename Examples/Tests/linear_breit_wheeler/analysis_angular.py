@@ -5,9 +5,9 @@ This test checks the angular distribution of electron-positron pairs
 produced by linear Breit-Wheeler pair production (gamma gamma -> e+ e-).
 
 Two monoenergetic photon populations counter-propagate head-on along the
-x-axis with normalized momentum ux = +/-2.8 (in units of m_e*c).
-Since the total momentum is zero, the center-of-momentum (CM) frame
-coincides with the lab frame.
+x-axis. The test is run at normalized momenta ux = +/-2.8 and +/-1.e6
+(in units of m_e*c). Since the total momentum is zero, the
+center-of-momentum (CM) frame coincides with the lab frame.
 
 The test verifies:
   1. Energy and momentum conservation (via reduced diagnostics).
@@ -23,21 +23,26 @@ The test verifies:
         - s = (photon_energy/(m_e*c^2)) ^2
 """
 
+import sys
+
 import numpy as np
 from openpmd_viewer import OpenPMDTimeSeries
 from scipy.constants import c, m_e
 
-do_plot = True
+do_plot = False
 
 
-def lbw_diff_xsec(beta, cos_theta):
-    """BW differential cross section dsigma/d(cos(theta))."""
-    b2 = beta**2
-    b4 = b2**2
-    x2 = cos_theta**2
-    num = 1.0 + 2.0 * b2 - 2.0 * b4 - 2.0 * b2 * (1.0 - b2) * x2 - b4 * x2**2
-    den = (1.0 - b2 * x2) ** 2
-    return num / den
+def lbw_integral_transformed(beta, one_minus_beta2, angular_rapidity):
+    """Integral of the BW cross section for y = atanh(beta*cos(theta))."""
+    tanh_y = np.tanh(angular_rapidity)
+    sech2_y = 1.0 / np.cosh(angular_rapidity) ** 2
+    cos_theta = tanh_y / beta
+    coefficient = 2.0 + 2.0 * one_minus_beta2 - one_minus_beta2**2
+    return (
+        -(cos_theta * one_minus_beta2**2) / sech2_y
+        - cos_theta
+        + coefficient * angular_rapidity / beta
+    )
 
 
 def check_energy_conservation():
@@ -71,14 +76,14 @@ def check_momentum_conservation():
     assert np.all(np.isclose(total_pz, total_pz[0], rtol=5e-10, atol=0.0))
 
 
-def check_angular_distribution():
+def check_angular_distribution(ux_photon):
     """Check angular distribution of produced pairs against BW theory."""
-    ux_photon = 2.8  # = photon_energy/(m_e*c^2)
-
     # For head-on collision of equal-energy photons:
     # s = ux_photon^2 and beta = sqrt(1 - 1/s)
     s = ux_photon**2
-    beta = np.sqrt(1.0 - 1.0 / s)
+    one_minus_beta2 = 1.0 / s
+    max_angular_rapidity = np.arccosh(ux_photon)
+    beta = np.tanh(max_angular_rapidity)
     gamma_expected = ux_photon
 
     ts = OpenPMDTimeSeries("diags/diag1/")
@@ -101,31 +106,60 @@ def check_angular_distribution():
     # the direction of photon 1 (along +x in this test).
     cos_theta = ux_e / u_mag
 
-    # Binned histogram of cos(theta), weighted by particle weight
-    n_bins = 20
-    bins = np.linspace(-1, 1, n_bins + 1)
-    bin_centers = 0.5 * (bins[:-1] + bins[1:])
-    bin_width = bins[1] - bins[0]
-    hist, _ = np.histogram(cos_theta, bins=bins, weights=w_e)
-
-    # Expected bin counts from the unnormalized differential cross section.
-    # The total weight fixes the absolute scale; the shape comes from theory.
-    theory_shape = lbw_diff_xsec(beta, bin_centers)
-    x_fine = np.linspace(-1, 1, 10001)
-    integral_f = np.trapezoid(lbw_diff_xsec(beta, x_fine), x_fine)
-
-    # Verify analytical vs numerical integral of f.
-    # Analytical: integral of f from -1 to 1 = [(3-b^4)*ln((1+b)/(1-b)) + 2b(b^2-2)] / b
-    term1 = (3.0 - beta**4) * np.log((1.0 + beta) / (1.0 - beta))
-    term2 = 2.0 * beta * (beta**2 - 2.0)
-    integral_f_analytical = (term1 + term2) / beta
-    assert np.isclose(integral_f, integral_f_analytical, rtol=1e-6), (
-        f"Numerical integral {integral_f:.8f} != analytical {integral_f_analytical:.8f}"
+    # The transformed coordinate remains well resolved when the distribution is
+    # strongly peaked near cos(theta) = +/-1.
+    angular_rapidity = np.arctanh(np.clip(beta * cos_theta, -beta, beta))
+    integral_at_one = lbw_integral_transformed(
+        beta, one_minus_beta2, max_angular_rapidity
+    )
+    cdf = (
+        0.5
+        + 0.5
+        * lbw_integral_transformed(beta, one_minus_beta2, angular_rapidity)
+        / integral_at_one
     )
 
-    expected_counts = hist.sum() * bin_width * theory_shape / integral_f
+    # Inverse-transform sampling makes the theoretical CDF values uniform.
+    order = np.argsort(cdf)
+    sorted_cdf = cdf[order]
+    normalized_weights = w_e[order] / np.sum(w_e)
+    empirical_cdf = np.cumsum(normalized_weights)
+    empirical_cdf_before = empirical_cdf - normalized_weights
+    ks_distance = max(
+        np.max(np.abs(empirical_cdf - sorted_cdf)),
+        np.max(np.abs(empirical_cdf_before - sorted_cdf)),
+    )
+    print(f"Weighted CDF distance: {ks_distance:.6f}")
+    assert ks_distance < 0.01, (
+        f"Angular distribution does not match BW theory: KS distance={ks_distance:.6f}"
+    )
 
-    # Compare simulation with theory (unnormalized)
+    # Binned histogram in angular rapidity, weighted by particle weight.
+    n_bins = 20
+    bins = np.linspace(-max_angular_rapidity, max_angular_rapidity, n_bins + 1)
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+    bin_width = bins[1] - bins[0]
+    hist, _ = np.histogram(angular_rapidity, bins=bins, weights=w_e)
+
+    # Expected bin counts from exact differences of the analytical CDF.
+    cdf_edges = (
+        0.5
+        + 0.5 * lbw_integral_transformed(beta, one_minus_beta2, bins) / integral_at_one
+    )
+    expected_counts = hist.sum() * np.diff(cdf_edges)
+
+    # Verify the transformed integral against the total cross-section expression.
+    term1 = (
+        (2.0 + 2.0 * one_minus_beta2 - one_minus_beta2**2) * 2.0 * max_angular_rapidity
+    )
+    term2 = -2.0 * beta * (1.0 + one_minus_beta2)
+    integral_f_analytical = (term1 + term2) / beta
+    assert np.isclose(2.0 * integral_at_one, integral_f_analytical, rtol=1e-6), (
+        f"Transformed integral {2.0 * integral_at_one:.8f} != "
+        f"analytical integral {integral_f_analytical:.8f}"
+    )
+
+    # Compare the binned simulation result with theory.
     rel_err = np.abs(hist - expected_counts) / expected_counts
     max_rel_err = np.max(rel_err)
     print(f"Max relative error in angular distribution: {max_rel_err:.4f}")
@@ -136,15 +170,19 @@ def check_angular_distribution():
     if do_plot:
         import matplotlib.pyplot as plt
 
-        cos_fine = np.linspace(-1, 1, 500)
-        theory_fine = (
-            hist.sum() * bin_width * lbw_diff_xsec(beta, cos_fine) / integral_f
+        y_fine = np.linspace(-max_angular_rapidity, max_angular_rapidity, 500)
+        cdf_fine = (
+            0.5
+            + 0.5
+            * lbw_integral_transformed(beta, one_minus_beta2, y_fine)
+            / integral_at_one
         )
+        theory_fine = hist.sum() * bin_width * np.gradient(cdf_fine, y_fine)
 
         fig, ax = plt.subplots()
         ax.bar(bin_centers, hist, width=bin_width * 0.9, alpha=0.6, label="Simulation")
-        ax.plot(cos_fine, theory_fine, "r-", lw=2, label="BW theory")
-        ax.set_xlabel(r"$\cos\theta^*$")
+        ax.plot(y_fine, theory_fine, "r-", lw=2, label="BW theory")
+        ax.set_xlabel(r"$\operatorname{atanh}(\beta\cos\theta^*)$")
         ax.set_ylabel("Weighted pair count")
         ax.set_title(
             rf"BW angular distribution ($u_\gamma = {ux_photon}$, "
@@ -158,9 +196,10 @@ def check_angular_distribution():
 
 
 def main():
+    ux_photon = float(sys.argv[1]) if len(sys.argv) > 1 else 2.8
     check_energy_conservation()
     check_momentum_conservation()
-    check_angular_distribution()
+    check_angular_distribution(ux_photon)
 
 
 if __name__ == "__main__":

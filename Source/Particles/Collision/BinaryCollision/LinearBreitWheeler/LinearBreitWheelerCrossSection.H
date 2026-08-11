@@ -76,7 +76,8 @@ amrex::ParticleReal LBWIntegralOfDifferentialCrossSection (
 /**
  * \brief Unnormalized BW differential cross section dsigma/d(cos theta).
  * The full differential cross section is:
- *   dsigma/d(cos theta) = (pi * r_e^2 / 2) * (1 - beta^2) * f(beta, cos theta)
+ *   dsigma/d(cos theta) = (pi * r_e^2 / 2) * beta * (1 - beta^2)
+ *                         * f(beta, cos theta)
  * This function returns f(beta, cos theta).
  *
  * Reference: Berestetskii, Lifshitz, Pitaevskii, "Quantum Electrodynamics", par. 86.
@@ -98,5 +99,61 @@ amrex::ParticleReal LBWDifferentialCrossSection (
         - 2._prt * beta2 * (1._prt - beta2) * x2 - beta4 * x2 * x2;
     const amrex::ParticleReal den = (1._prt - beta2 * x2) * (1._prt - beta2 * x2);
     return num / den;
+}
+
+/**
+ * \brief Indefinite integral of the unnormalized BW differential cross section,
+ * evaluated in the transformed coordinate y = atanh(beta*cos(theta)).
+ *
+ * This form avoids loss of precision near cos(theta) = +/-1 for highly relativistic
+ * products. The value is equivalent to LBWIntegralOfDifferentialCrossSection(beta, x),
+ * with x = tanh(y)/beta.
+ *
+ * @param[in] beta velocity of the produced leptons in the CM frame (dimensionless)
+ * @param[in] one_minus_beta2 1 - beta^2, evaluated without subtractive cancellation
+ * @param[in] y transformed angular coordinate atanh(beta*cos(theta))
+ * @return the indefinite integral evaluated at y
+ */
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+amrex::ParticleReal LBWIntegralOfDifferentialCrossSectionTransformed (
+    const amrex::ParticleReal& beta,
+    const amrex::ParticleReal& one_minus_beta2,
+    const amrex::ParticleReal& y)
+{
+    using namespace amrex::literals;
+
+    const amrex::ParticleReal tanh_y = std::tanh(y);
+    const amrex::ParticleReal cosh_y = std::cosh(y);
+    const amrex::ParticleReal sech2_y = 1._prt / (cosh_y * cosh_y);
+    const amrex::ParticleReal x = tanh_y / beta;
+    const amrex::ParticleReal coefficient =
+        2._prt + 2._prt * one_minus_beta2 - one_minus_beta2 * one_minus_beta2;
+    return -x * one_minus_beta2 * one_minus_beta2 / sech2_y - x
+        + coefficient * y / beta;
+}
+
+/**
+ * \brief Derivative with respect to y of
+ * LBWIntegralOfDifferentialCrossSectionTransformed.
+ *
+ * @param[in] beta velocity of the produced leptons in the CM frame (dimensionless)
+ * @param[in] one_minus_beta2 1 - beta^2, evaluated without subtractive cancellation
+ * @param[in] y transformed angular coordinate atanh(beta*cos(theta))
+ * @return the unnormalized differential cross section with respect to y
+ */
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+amrex::ParticleReal LBWDifferentialCrossSectionTransformed (
+    const amrex::ParticleReal& beta,
+    const amrex::ParticleReal& one_minus_beta2,
+    const amrex::ParticleReal& y)
+{
+    using namespace amrex::literals;
+
+    const amrex::ParticleReal tanh_y = std::tanh(y);
+    const amrex::ParticleReal cosh_y = std::cosh(y);
+    const amrex::ParticleReal sech2_y = 1._prt / (cosh_y * cosh_y);
+    return (1._prt + tanh_y * tanh_y
+        + 2._prt * one_minus_beta2
+            * (1._prt - one_minus_beta2 / sech2_y)) / beta;
 }
 #endif // LINEAR_BREIT_WHEELER_CROSS_SECTION_H
