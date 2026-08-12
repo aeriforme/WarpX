@@ -125,11 +125,9 @@ void
 web::MarkUpdateCellsStairCase (
     std::array< std::unique_ptr<amrex::iMultiFab>,3> & eb_update,
     ablastr::fields::VectorField const& field,
-    amrex::EBFArrayBoxFactory const & eb_fact )
+    amrex::EBFArrayBoxFactory const & eb_fact,
+    const amrex::Periodicity& periodicity )
 {
-
-    using ablastr::fields::Direction;
-    using warpx::fields::FieldType;
 
     // Extract structures for embedded boundaries
     amrex::FabArray<amrex::EBCellFlagFab> const& eb_flag = eb_fact.getMultiEBCellFlagFab();
@@ -212,7 +210,8 @@ web::MarkUpdateCellsStairCase (
             }
 
         }
-
+        // Populate guard cells
+        eb_update[idim]->FillBoundary(periodicity);
     }
 
 }
