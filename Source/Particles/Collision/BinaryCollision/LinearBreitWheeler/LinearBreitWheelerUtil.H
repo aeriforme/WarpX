@@ -63,7 +63,7 @@ namespace {
 
         constexpr amrex::ParticleReal c_sq = PhysConst::c2;
         constexpr amrex::ParticleReal me = PhysConst::m_e;
-        auto constexpr pow2 = [](double const x) { return x*x; };
+        auto constexpr pow2 = [](amrex::ParticleReal const x) { return x*x; };
 
         // Compute momenta
         const amrex::ParticleReal p1x_in = u1x_in * me;
