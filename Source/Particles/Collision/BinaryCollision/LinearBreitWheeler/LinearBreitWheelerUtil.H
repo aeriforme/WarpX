@@ -259,4 +259,5 @@ namespace {
         u2z_out = p2z_out/me;
     }
 }
+
 #endif // LINEAR_BREIT_WHEELER_UTIL_H

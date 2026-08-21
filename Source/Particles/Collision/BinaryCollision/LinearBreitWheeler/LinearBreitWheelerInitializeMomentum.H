@@ -86,4 +86,5 @@ namespace {
         soa2_out.m_rdata[PIdx::uz][idx2_out_start + 1] = uz2_out;
     }
 }
+
 #endif // LINEAR_BREIT_WHEELER_INITIALIZE_MOMENTUM_H
