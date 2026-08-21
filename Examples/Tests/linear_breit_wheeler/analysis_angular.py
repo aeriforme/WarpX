@@ -45,14 +45,12 @@ def lbw_integral_transformed(beta, one_minus_beta2, angular_rapidity):
     )
 
 
-def check_energy_conservation():
+def check_energy_conservation(ekin_data, num_data):
     """Check total energy conservation using reduced diagnostics."""
-    ekin_data = np.loadtxt("diags/reducedfiles/ParticleEnergy.txt")
     ekin_photonA = ekin_data[:, 3]
     ekin_photonB = ekin_data[:, 4]
     ekin_electron = ekin_data[:, 5]
     ekin_positron = ekin_data[:, 6]
-    num_data = np.loadtxt("diags/reducedfiles/ParticleNumber.txt")
     num_phys_electron = num_data[:, 10]
     num_phys_positron = num_data[:, 11]
     total_energy = (
@@ -65,15 +63,27 @@ def check_energy_conservation():
     assert np.all(np.isclose(total_energy, total_energy[0], rtol=5e-10, atol=0.0))
 
 
-def check_momentum_conservation():
+def check_momentum_conservation(mom_data, ekin_data):
     """Check total momentum conservation using reduced diagnostics."""
-    mom_data = np.loadtxt("diags/reducedfiles/ParticleMomentum.txt")
-    total_px = mom_data[:, 2]
-    total_py = mom_data[:, 3]
-    total_pz = mom_data[:, 4]
-    assert np.all(np.isclose(total_px, total_px[0], rtol=5e-10, atol=0.0))
-    assert np.all(np.isclose(total_py, total_py[0], rtol=5e-10, atol=0.0))
-    assert np.all(np.isclose(total_pz, total_pz[0], rtol=5e-10, atol=0.0))
+    p_tot = mom_data[:, 2:5]
+
+    # In this setup, total momentum is expected to remain zero.
+    # Use an absolute tolerance based on a physical momentum scale rather than
+    # a relative tolerance against a near-zero reference value (e.g., initial value).
+    ekin_total_t0 = ekin_data[0, 2]
+    momentum_abs_tol = 5e-10 * ekin_total_t0 / c
+
+    for label, p in zip("xyz", p_tot.T):
+        assert np.abs(p[0]) < momentum_abs_tol, (
+            f"Initial total p{label}={p[0]:.3e} exceeds {momentum_abs_tol:.3e}"
+        )
+
+        max_dp = np.max(np.abs(p - p[0]))
+        assert max_dp < momentum_abs_tol, (
+            f"p{label} conservation failed: "
+            f"max |p{label} - p{label}(0)| = {max_dp:.3e} "
+            f"exceeds {momentum_abs_tol:.3e}"
+        )
 
 
 def check_angular_distribution(ux_photon):
@@ -197,8 +207,12 @@ def check_angular_distribution(ux_photon):
 
 def main():
     ux_photon = float(sys.argv[1]) if len(sys.argv) > 1 else 2.8
-    check_energy_conservation()
-    check_momentum_conservation()
+    ekin_data = np.loadtxt("diags/reducedfiles/ParticleEnergy.txt")
+    num_data = np.loadtxt("diags/reducedfiles/ParticleNumber.txt")
+    mom_data = np.loadtxt("diags/reducedfiles/ParticleMomentum.txt")
+
+    check_energy_conservation(ekin_data, num_data)
+    check_momentum_conservation(mom_data, ekin_data)
     check_angular_distribution(ux_photon)
 
 
