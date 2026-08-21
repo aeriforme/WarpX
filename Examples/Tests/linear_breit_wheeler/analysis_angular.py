@@ -29,6 +29,9 @@ import numpy as np
 from openpmd_viewer import OpenPMDTimeSeries
 from scipy.constants import c, m_e
 
+sys.path.append("../../../Tools/Parser/")
+from input_file_parser import parse_input_file
+
 do_plot = False
 
 
@@ -86,7 +89,7 @@ def check_momentum_conservation(mom_data, ekin_data):
         )
 
 
-def check_angular_distribution(ux_photon):
+def check_angular_distribution(ts, ux_photon):
     """Check angular distribution of produced pairs against BW theory."""
     # For head-on collision of equal-energy photons:
     # s = ux_photon^2 and beta = sqrt(1 - 1/s)
@@ -96,7 +99,6 @@ def check_angular_distribution(ux_photon):
     beta = np.tanh(max_angular_rapidity)
     gamma_expected = ux_photon
 
-    ts = OpenPMDTimeSeries("diags/diag1/")
     it = ts.iterations[-1]
 
     ux_e, uy_e, uz_e, w_e = ts.get_particle(
@@ -206,14 +208,17 @@ def check_angular_distribution(ux_photon):
 
 
 def main():
-    ux_photon = float(sys.argv[1]) if len(sys.argv) > 1 else 2.8
+    ts = OpenPMDTimeSeries("diags/diag1/")
     ekin_data = np.loadtxt("diags/reducedfiles/ParticleEnergy.txt")
     num_data = np.loadtxt("diags/reducedfiles/ParticleNumber.txt")
     mom_data = np.loadtxt("diags/reducedfiles/ParticleMomentum.txt")
 
+    input_dict = parse_input_file("warpx_used_inputs")
+    ux_photon = float(input_dict["photonA.ux"][0])
+
     check_energy_conservation(ekin_data, num_data)
     check_momentum_conservation(mom_data, ekin_data)
-    check_angular_distribution(ux_photon)
+    check_angular_distribution(ts, ux_photon)
 
 
 if __name__ == "__main__":

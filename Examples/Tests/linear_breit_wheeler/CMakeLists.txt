@@ -6,7 +6,7 @@ add_warpx_test(
     3  # dims
     2  # nprocs
     inputs_test_3d_linear_breit_wheeler_angular  # inputs
-    "analysis_angular.py 2.8"  # analysis
+    "analysis_angular.py"  # analysis
     "analysis_default_regression.py --path diags/diag1 --skip-fields"  # checksum
     OFF  # dependency
 )
@@ -16,7 +16,7 @@ add_warpx_test(
     3  # dims
     2  # nprocs
     inputs_test_3d_linear_breit_wheeler_angular_relativistic  # inputs
-    "analysis_angular.py 1.e6"  # analysis
+    "analysis_angular.py"  # analysis
     "analysis_default_regression.py --path diags/diag1 --skip-fields"  # checksum
     OFF  # dependency
 )
