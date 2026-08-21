@@ -13,6 +13,7 @@
 #include "Utils/ParticleUtils.H"
 #include "Utils/WarpXConst.H"
 
+#include <AMReX_Math.H>
 #include <AMReX_Random.H>
 #include <AMReX_REAL.H>
 
@@ -61,9 +62,9 @@ namespace {
     {
         using namespace amrex::literals;
 
-        constexpr amrex::ParticleReal c_sq = PhysConst::c2;
+        constexpr auto c2 = PhysConst::c2_v<amrex::ParticleReal>;
+        constexpr auto inv_c2 = PhysConst::inv_c2_v<amrex::ParticleReal>;
         constexpr amrex::ParticleReal me = PhysConst::m_e;
-        auto constexpr pow2 = [](amrex::ParticleReal const x) { return x*x; };
 
         // Compute momenta
         const amrex::ParticleReal p1x_in = u1x_in * me;
@@ -72,23 +73,23 @@ namespace {
         const amrex::ParticleReal p2x_in = u2x_in * me;
         const amrex::ParticleReal p2y_in = u2y_in * me;
         const amrex::ParticleReal p2z_in = u2z_in * me;
-        const amrex::ParticleReal p1_in = std::sqrt(pow2(p1x_in)+pow2(p1y_in)+pow2(p1z_in));
-        const amrex::ParticleReal p2_in = std::sqrt(pow2(p2x_in)+pow2(p2y_in)+pow2(p2z_in));
+        const amrex::ParticleReal p1_in = std::sqrt(amrex::Math::powi<2>(p1x_in)+amrex::Math::powi<2>(p1y_in)+amrex::Math::powi<2>(p1z_in));
+        const amrex::ParticleReal p2_in = std::sqrt(amrex::Math::powi<2>(p2x_in)+amrex::Math::powi<2>(p2y_in)+amrex::Math::powi<2>(p2z_in));
 
         // Compute cosine of the angle between the two photon momenta in the lab frame
         const amrex::ParticleReal cos_ang = (p1x_in*p2x_in+p1y_in*p2y_in+p1z_in*p2z_in)/(p1_in*p2_in);
 
         // Energy squared of each of the two colliding photons in the center of momentum frame,
         // calculated using the Lorentz invariance of the total four-momentum norm
-        const amrex::ParticleReal E_star_sq = 0.5_prt*c_sq*p1_in*p2_in*(1._prt - cos_ang);
+        const amrex::ParticleReal E_star_sq = 0.5_prt*c2*p1_in*p2_in*(1._prt - cos_ang);
 
         // Square of the norm of the momentum of the products in the center of mass frame
         // Formula obtained by inverting E^2 = p^2*c^2 + m^2*c^4 in the COM frame for each particle:
-        // p_star_sq = E_star_sq/c_sq - me*me*c_sq;
+        // p_star_sq = E_star_sq/c2 - me*me*c2;
         // The expression below is specifically written in a form that avoids returning
         // small negative numbers due to machine precision errors, for low-energy particles
-        const amrex::ParticleReal E_ratio = std::sqrt(E_star_sq)/(2._prt*me*c_sq);
-        const amrex::ParticleReal p_star_sq = me*me*c_sq * ( pow2(2._prt*E_ratio) - 1._prt );
+        const amrex::ParticleReal E_ratio = std::sqrt(E_star_sq)/(2._prt*me*c2);
+        const amrex::ParticleReal p_star_sq = me*me*c2 * ( amrex::Math::powi<2>(2._prt*E_ratio) - 1._prt );
 
         // Compute momentum of first product in the center of mass frame.
         // The polar angle is sampled from the BW differential cross section
@@ -96,7 +97,7 @@ namespace {
         amrex::ParticleReal px_star, py_star, pz_star;
 
         // s = (E_CM / (2*me*c^2))^2 = (E_star / (me*c^2))^2
-        const amrex::ParticleReal s = pow2(2._prt * E_ratio);
+    const amrex::ParticleReal s = amrex::Math::powi<2>(2._prt * E_ratio);
         const amrex::ParticleReal one_minus_beta2 = 1._prt / s;
         const amrex::ParticleReal gamma_star = std::sqrt(s);
         const amrex::ParticleReal max_angular_rapidity = std::acosh(gamma_star);
@@ -180,7 +181,7 @@ namespace {
         if (vc_sq > std::numeric_limits<amrex::ParticleReal>::min())
         {
             // Lorentz factor of the CM frame boost
-            gc = 1._prt / std::sqrt(1._prt - vc_sq * PhysConst::inv_c2);
+            gc = 1._prt / std::sqrt(1._prt - vc_sq * inv_c2);
             const amrex::ParticleReal vc_dot_p1 = vcx*p1x_in + vcy*p1y_in + vcz*p1z_in;
             const amrex::ParticleReal bfact = (gc - 1._prt) / vc_sq * vc_dot_p1 - gc * p1_in / PhysConst::c;
             nx += vcx * bfact;
@@ -229,7 +230,7 @@ namespace {
             // Phys.Plasmas.19.083104 (2012) (which is a regular Lorentz transformation)
             // p1_lab = p1_CM - v_CM * [(gc−1)/v^2 * (v_CM \dot p1) − gc*|p1|/c]
             // Lorentz factor of the product (electron/positron) in the CM frame
-            const amrex::ParticleReal g_star = std::sqrt(1._prt + p_star_sq / (me*me*c_sq));
+            const amrex::ParticleReal g_star = std::sqrt(1._prt + p_star_sq / (me*me*c2));
             const amrex::ParticleReal vc_dot_ps = vcx*px_star + vcy*py_star + vcz*pz_star;
             const amrex::ParticleReal factor0 = (gc-1._prt)/vc_sq;
             const amrex::ParticleReal factor = factor0*vc_dot_ps + me*g_star*gc;
