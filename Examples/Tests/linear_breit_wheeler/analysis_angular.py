@@ -23,6 +23,7 @@ The test verifies:
         - s = (photon_energy/(m_e*c^2)) ^2
 """
 
+import re
 import sys
 
 import numpy as np
@@ -33,6 +34,28 @@ sys.path.append("../../../Tools/Parser/")
 from input_file_parser import parse_input_file
 
 do_plot = False
+
+
+def load_reduced_diagnostic(filename):
+    """Load a reduced diagnostic as a dict mapping header names to columns."""
+    with open(filename) as diagnostic_file:
+        names = re.findall(r"\[\d+\]([^\[\s]+)", diagnostic_file.readline())
+    data = np.loadtxt(filename)
+    data = np.atleast_2d(data)
+    assert len(names) == data.shape[1], f"{filename}: header/data column mismatch"
+    return dict(zip(names, data.T))
+
+
+def get_reduced_column(data, name):
+    """Return the data column for an exact reduced-diagnostic column name."""
+    try:
+        return data[name]
+    except KeyError as error:
+        available_names = ", ".join(sorted(data.keys()))
+        raise KeyError(
+            f"Missing reduced diagnostic column {name!r}; available columns: "
+            f"{available_names}"
+        ) from error
 
 
 def lbw_integral_transformed(beta, one_minus_beta2, angular_rapidity):
@@ -50,12 +73,12 @@ def lbw_integral_transformed(beta, one_minus_beta2, angular_rapidity):
 
 def check_energy_conservation(ekin_data, num_data):
     """Check total energy conservation using reduced diagnostics."""
-    ekin_photonA = ekin_data[:, 3]
-    ekin_photonB = ekin_data[:, 4]
-    ekin_electron = ekin_data[:, 5]
-    ekin_positron = ekin_data[:, 6]
-    num_phys_electron = num_data[:, 10]
-    num_phys_positron = num_data[:, 11]
+    ekin_photonA = get_reduced_column(ekin_data, "photonA(J)")
+    ekin_photonB = get_reduced_column(ekin_data, "photonB(J)")
+    ekin_electron = get_reduced_column(ekin_data, "electron(J)")
+    ekin_positron = get_reduced_column(ekin_data, "positron(J)")
+    num_phys_electron = get_reduced_column(num_data, "electron_weight()")
+    num_phys_positron = get_reduced_column(num_data, "positron_weight()")
     total_energy = (
         ekin_photonA
         + ekin_photonB
@@ -66,17 +89,12 @@ def check_energy_conservation(ekin_data, num_data):
     assert np.all(np.isclose(total_energy, total_energy[0], rtol=5e-10, atol=0.0))
 
 
-def check_momentum_conservation(mom_data, ekin_data):
+def check_momentum_conservation(mom_data, momentum_abs_tol):
     """Check total momentum conservation using reduced diagnostics."""
-    p_tot = mom_data[:, 2:5]
-
     # In this setup, total momentum is expected to remain zero.
-    # Use an absolute tolerance based on a physical momentum scale rather than
-    # a relative tolerance against a near-zero reference value (e.g., initial value).
-    ekin_total_t0 = ekin_data[0, 2]
-    momentum_abs_tol = 5e-10 * ekin_total_t0 / c
 
-    for label, p in zip("xyz", p_tot.T):
+    for label in "xyz":
+        p = get_reduced_column(mom_data, f"total_{label}(kg*m/s)")
         assert np.abs(p[0]) < momentum_abs_tol, (
             f"Initial total p{label}={p[0]:.3e} exceeds {momentum_abs_tol:.3e}"
         )
@@ -209,15 +227,24 @@ def check_angular_distribution(ts, ux_photon):
 
 def main():
     ts = OpenPMDTimeSeries("diags/diag1/")
-    ekin_data = np.loadtxt("diags/reducedfiles/ParticleEnergy.txt")
-    num_data = np.loadtxt("diags/reducedfiles/ParticleNumber.txt")
-    mom_data = np.loadtxt("diags/reducedfiles/ParticleMomentum.txt")
+    ekin_data = load_reduced_diagnostic("diags/reducedfiles/ParticleEnergy.txt")
+    num_data = load_reduced_diagnostic("diags/reducedfiles/ParticleNumber.txt")
+    mom_data = load_reduced_diagnostic("diags/reducedfiles/ParticleMomentum.txt")
 
     input_dict = parse_input_file("warpx_used_inputs")
+    expected_species = {"photonA", "photonB", "electron", "positron"}
+    configured_species = set(input_dict["particles.species_names"])
+    assert configured_species == expected_species, (
+        "linear Breit-Wheeler angular analysis expects species "
+        f"{sorted(expected_species)}, got {sorted(configured_species)}"
+    )
     ux_photon = float(input_dict["photonA.ux"][0])
+    # Use an absolute tolerance based on a physical momentum scale rather than
+    # a relative tolerance against a near-zero reference value (e.g., initial value).
+    momentum_abs_tol = 5e-10 * get_reduced_column(ekin_data, "total(J)")[0] / c
 
     check_energy_conservation(ekin_data, num_data)
-    check_momentum_conservation(mom_data, ekin_data)
+    check_momentum_conservation(mom_data, momentum_abs_tol)
     check_angular_distribution(ts, ux_photon)
 
 
