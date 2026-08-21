@@ -191,9 +191,8 @@ namespace {
         nx /= n_mag;
         ny /= n_mag;
         nz /= n_mag;
-        // Build orthonormal basis (e1, e2, n) with n along collision axis
-        // if n is near z: n \times (0,0,1) = (ny, -nx, 0)
-        // otherwise: n \times (1,0,0) = (0, nz, -ny)
+        // Build orthonormal basis (e1,e2,n) with n along the collision axis:
+        // if n is not near z, n \times (0,0,1) = (ny,-nx,0); otherwise, n \times (1,0,0) = (0,nz,-ny)
         amrex::ParticleReal e1x, e1y, e1z;
         if (amrex::Math::abs(nz) < 0.9_prt)
         {
