@@ -33,8 +33,6 @@ from scipy.constants import c, m_e
 sys.path.append("../../../Tools/Parser/")
 from input_file_parser import parse_input_file
 
-do_plot = False
-
 
 def load_reduced_diagnostic(filename):
     """Load a reduced diagnostic as a dict mapping header names to columns."""
@@ -86,7 +84,10 @@ def check_energy_conservation(ekin_data, num_data):
         + ekin_positron
         + m_e * c**2 * (num_phys_electron + num_phys_positron)
     )
-    assert np.all(np.isclose(total_energy, total_energy[0], rtol=5e-10, atol=0.0))
+    max_de = np.max(np.abs(total_energy - total_energy[0]))
+    assert np.allclose(total_energy, total_energy[0], rtol=5e-10, atol=0.0), (
+        f"Energy conservation failed: max |E - E(0)| = {max_de:.3e} J"
+    )
 
 
 def check_momentum_conservation(mom_data, momentum_abs_tol):
@@ -193,36 +194,34 @@ def check_angular_distribution(ts, ux_photon):
     rel_err = np.abs(hist - expected_counts) / expected_counts
     max_rel_err = np.max(rel_err)
     print(f"Max relative error in angular distribution: {max_rel_err:.4f}")
-    assert np.all(rel_err < 0.15), (
+    assert max_rel_err < 0.15, (
         f"Angular distribution does not match BW theory: max_rel_err={max_rel_err:.4f}"
     )
 
-    if do_plot:
-        import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
 
-        y_fine = np.linspace(-max_angular_rapidity, max_angular_rapidity, 500)
-        cdf_fine = (
-            0.5
-            + 0.5
-            * lbw_integral_transformed(beta, one_minus_beta2, y_fine)
-            / integral_at_one
-        )
-        theory_fine = hist.sum() * bin_width * np.gradient(cdf_fine, y_fine)
+    y_fine = np.linspace(-max_angular_rapidity, max_angular_rapidity, 500)
+    cdf_fine = (
+        0.5
+        + 0.5
+        * lbw_integral_transformed(beta, one_minus_beta2, y_fine)
+        / integral_at_one
+    )
+    theory_fine = hist.sum() * bin_width * np.gradient(cdf_fine, y_fine)
 
-        fig, ax = plt.subplots()
-        ax.bar(bin_centers, hist, width=bin_width * 0.9, alpha=0.6, label="Simulation")
-        ax.plot(y_fine, theory_fine, "r-", lw=2, label="BW theory")
-        ax.set_xlabel(r"$\operatorname{atanh}(\beta\cos\theta^*)$")
-        ax.set_ylabel("Weighted pair count")
-        ax.set_title(
-            rf"BW angular distribution ($u_\gamma = {ux_photon}$, "
-            rf"$\beta = {beta:.3f}$)"
-        )
-        ax.legend()
-        fig.tight_layout()
-        fig.savefig("angular_distribution.png", dpi=150)
-        print("Saved angular_distribution.png")
-        plt.show()
+    fig, ax = plt.subplots()
+    ax.bar(bin_centers, hist, width=bin_width * 0.9, alpha=0.6, label="Simulation")
+    ax.plot(y_fine, theory_fine, "r-", lw=2, label="BW theory")
+    ax.set_xlabel(r"$\operatorname{atanh}(\beta\cos\theta^*)$")
+    ax.set_ylabel("Weighted pair count")
+    ax.set_title(
+        rf"BW angular distribution ($u_\gamma = {ux_photon}$, "
+        rf"$\beta = {beta:.3f}$)"
+    )
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig("angular_distribution.png", dpi=150)
+    print("Saved angular_distribution.png")
 
 
 def main():
