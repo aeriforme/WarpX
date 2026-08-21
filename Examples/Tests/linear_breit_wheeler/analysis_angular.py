@@ -238,7 +238,22 @@ def main():
         "linear Breit-Wheeler angular analysis expects species "
         f"{sorted(expected_species)}, got {sorted(configured_species)}"
     )
-    ux_photon = float(input_dict["photonA.ux"][0])
+    ux_photon_a = float(input_dict["photonA.ux"][0])
+    ux_photon_b = float(input_dict["photonB.ux"][0])
+    assert np.isclose(ux_photon_b, -ux_photon_a, rtol=0.0, atol=1e-14), (
+        "Expected head-on equal-energy photons with photonB.ux = -photonA.ux, "
+        f"got photonA.ux={ux_photon_a} and photonB.ux={ux_photon_b}"
+    )
+
+    for species in ("photonA", "photonB"):
+        for component in ("uy", "uz"):
+            value = float(input_dict.get(f"{species}.{component}", [0.0])[0])
+            assert np.isclose(value, 0.0, rtol=0.0, atol=1e-14), (
+                "Expected zero transverse momentum for head-on collision, "
+                f"got {species}.{component}={value}"
+            )
+
+    ux_photon = abs(ux_photon_a)
     # Use an absolute tolerance based on a physical momentum scale rather than
     # a relative tolerance against a near-zero reference value (e.g., initial value).
     momentum_abs_tol = 5e-10 * get_reduced_column(ekin_data, "total(J)")[0] / c
