@@ -8,11 +8,11 @@
 #ifndef LINEAR_BREIT_WHEELER_UTIL_H
 #define LINEAR_BREIT_WHEELER_UTIL_H
 
-#include "LinearBreitWheelerCrossSection.H"
+#include "Particles/Collision/BinaryCollision/LinearBreitWheeler/LinearBreitWheelerCrossSection.H"
 
-#include "Utils/ParticleUtils.H"
 #include "Utils/WarpXConst.H"
 
+#include <AMReX_Algorithm.H>
 #include <AMReX_Math.H>
 #include <AMReX_Random.H>
 #include <AMReX_REAL.H>
