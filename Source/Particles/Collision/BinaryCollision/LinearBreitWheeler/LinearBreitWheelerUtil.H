@@ -143,8 +143,12 @@ namespace {
                 LBWDifferentialCrossSectionTransformed(
                     beta, one_minus_beta2, angular_rapidity) / (2._prt * I1);
             const amrex::ParticleReal newton_candidate = angular_rapidity - G / G_prime;
-            if (newton_candidate > lower_bound && newton_candidate < upper_bound
-                && newton_candidate != angular_rapidity)
+            if (newton_candidate == angular_rapidity)
+            {
+                // Newton step underflowed: already converged to machine precision.
+                break;
+            }
+            if (newton_candidate > lower_bound && newton_candidate < upper_bound)
             {
                 angular_rapidity = newton_candidate;
             }
