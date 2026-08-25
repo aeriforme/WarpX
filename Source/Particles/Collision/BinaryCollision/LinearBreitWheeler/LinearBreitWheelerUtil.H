@@ -144,9 +144,14 @@ namespace {
                 LBWDifferentialCrossSectionTransformed(
                     beta, one_minus_beta2, angular_rapidity) / (2._prt * I1);
             const amrex::ParticleReal newton_candidate = angular_rapidity - G / G_prime;
-            if (newton_candidate == angular_rapidity)
+            const amrex::ParticleReal newton_step =
+                amrex::Math::abs(newton_candidate - angular_rapidity);
+            const amrex::ParticleReal newton_tolerance =
+                std::numeric_limits<amrex::ParticleReal>::epsilon()
+                * amrex::max(1._prt, amrex::Math::abs(angular_rapidity));
+            if (newton_step <= newton_tolerance)
             {
-                // Newton step underflowed: already converged to machine precision.
+                // The Newton update has converged to machine precision.
                 break;
             }
             if (newton_candidate > lower_bound && newton_candidate < upper_bound)
