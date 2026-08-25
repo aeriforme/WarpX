@@ -238,7 +238,7 @@ namespace {
         if ( vc_sq > std::numeric_limits<amrex::ParticleReal>::min() )
         {   // Convert momentum of first product to lab frame, using equation (13) of F. Perez et al.,
             // Phys.Plasmas.19.083104 (2012) (which is a regular Lorentz transformation)
-            // p1_lab = p1_CM - v_CM * [(gc−1)/v^2 * (v_CM \dot p1) − gc*|p1|/c]
+            // p1_lab = p1_CM + v_CM * [(gc−1)/v^2 * (v_CM \dot p1_CM) + me*g_star*gc]
             // Lorentz factor of the product (electron/positron) in the CM frame
             const amrex::ParticleReal g_star = std::sqrt(1._prt + p_star_sq / (me*me*c2));
             const amrex::ParticleReal vc_dot_ps = vcx*px_star + vcy*py_star + vcz*pz_star;

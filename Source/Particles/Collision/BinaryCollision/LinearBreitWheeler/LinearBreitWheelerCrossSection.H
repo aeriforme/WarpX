@@ -54,8 +54,9 @@ amrex::ParticleReal LinearBreitWheelerCrossSection (const amrex::ParticleReal& E
  * evaluated in the transformed coordinate y = atanh(beta*cos(theta)).
  *
  * This form avoids loss of precision near cos(theta) = +/-1 for highly relativistic
- * products. The value is equivalent to LBWIntegralOfDifferentialCrossSection(beta, x),
- * with x = tanh(y)/beta.
+ * products. It corresponds to the untransformed indefinite integral
+ * x / (1 - beta^2 x^2) * (-1 + 2 beta^2 - beta^4) - x
+ * + atanh(beta * x) / beta * (3 - beta^4), evaluated with x = tanh(y)/beta.
  *
  * @param[in] beta velocity of the produced leptons in the CM frame (dimensionless)
  * @param[in] one_minus_beta2 1 - beta^2, evaluated without subtractive cancellation
