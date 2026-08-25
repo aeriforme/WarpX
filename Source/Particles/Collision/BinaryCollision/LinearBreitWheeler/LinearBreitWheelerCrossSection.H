@@ -77,8 +77,7 @@ amrex::ParticleReal LBWIntegralOfDifferentialCrossSectionTransformed (
     const amrex::ParticleReal x = tanh_y / beta;
     const amrex::ParticleReal coefficient =
         2._prt + 2._prt * one_minus_beta2 - one_minus_beta2 * one_minus_beta2;
-    return -x * one_minus_beta2 * one_minus_beta2 / sech2_y - x
-        + coefficient * y / beta;
+    return -x * one_minus_beta2 * one_minus_beta2 / sech2_y - x + coefficient * y / beta;
 }
 
 /**
@@ -102,7 +101,6 @@ amrex::ParticleReal LBWDifferentialCrossSectionTransformed (
     const amrex::ParticleReal cosh_y = std::cosh(y);
     const amrex::ParticleReal sech2_y = 1._prt / (cosh_y * cosh_y);
     return (1._prt + tanh_y * tanh_y
-        + 2._prt * one_minus_beta2
-            * (1._prt - one_minus_beta2 / sech2_y)) / beta;
+        + 2._prt * one_minus_beta2 * (1._prt - one_minus_beta2 / sech2_y)) / beta;
 }
 #endif // LINEAR_BREIT_WHEELER_CROSS_SECTION_H

@@ -27,8 +27,8 @@ namespace {
      *
      * This is done by using the conservation of energy and momentum.
      * The polar angle of the products in the center-of-momentum frame is sampled
-     * from the Breit-Wheeler differential cross section dσ/d(cosθ) using
-     * Newton-Raphson inversion of the CDF. The azimuthal angle is uniform in [0, 2π).
+     * from the Breit-Wheeler differential cross section d\sigma/d(cos\theta) using
+     * Newton-Raphson inversion of the CDF. The azimuthal angle is uniform in [0, 2\pi).
      *
      * @param[in] u1x_in normalized momentum of the first colliding macrophoton along x (in m.s^-1)
      * @param[in] u1y_in normalized momentum of the first colliding macrophoton along y (in m.s^-1)
@@ -180,7 +180,7 @@ namespace {
 
         // Collision axis = n = direction of photon 1 in the CM frame.
         // Momentum of the first photon in the CM frame:
-        // p1_CM = p1_lab + v_CM * [(gc−1)/v^2 * (v_CM \dot p1) − gc*|p1|/c]
+        // p1_CM = p1_lab + v_CM * [(gc-1)/v^2 * (v_CM \dot p1) − gc*|p1|/c]
         // n = p1_CM / |p1_CM|
         // When v_CM ~ 0, photon 1's direction is unchanged.
         // Otherwise, Lorentz-boost photon 1 to the CM frame.
@@ -238,7 +238,7 @@ namespace {
         if ( vc_sq > std::numeric_limits<amrex::ParticleReal>::min() )
         {   // Convert momentum of first product to lab frame, using equation (13) of F. Perez et al.,
             // Phys.Plasmas.19.083104 (2012) (which is a regular Lorentz transformation)
-            // p1_lab = p1_CM + v_CM * [(gc−1)/v^2 * (v_CM \dot p1_CM) + me*g_star*gc]
+            // p1_lab = p1_CM + v_CM * [(gc-1)/v^2 * (v_CM \dot p1_CM) + me*g_star*gc]
             // Lorentz factor of the product (electron/positron) in the CM frame
             const amrex::ParticleReal g_star = std::sqrt(1._prt + p_star_sq / (me*me*c2));
             const amrex::ParticleReal vc_dot_ps = vcx*px_star + vcy*py_star + vcz*pz_star;
