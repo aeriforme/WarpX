@@ -98,7 +98,7 @@ namespace {
         amrex::ParticleReal px_star, py_star, pz_star;
 
         // s = (E_CM / (2*me*c^2))^2 = (E_star / (me*c^2))^2
-    const amrex::ParticleReal s = amrex::Math::powi<2>(2._prt * E_ratio);
+        const amrex::ParticleReal s = amrex::Math::powi<2>(2._prt * E_ratio);
         const amrex::ParticleReal one_minus_beta2 = 1._prt / s;
         const amrex::ParticleReal gamma_star = std::sqrt(s);
         const amrex::ParticleReal max_angular_rapidity = std::acosh(gamma_star);
