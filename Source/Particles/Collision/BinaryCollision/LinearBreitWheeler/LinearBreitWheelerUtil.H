@@ -243,8 +243,8 @@ namespace {
             p1y_out = py_star + vcy * factor;
             p1z_out = pz_star + vcz * factor;
         }
-        else
-        {   // If center of mass velocity is zero, we are already in the lab frame
+        else // If center of mass velocity is zero, we are already in the lab frame
+        {
             p1x_out = px_star;
             p1y_out = py_star;
             p1z_out = pz_star;
