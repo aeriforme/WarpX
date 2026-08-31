@@ -163,10 +163,14 @@ namespace {
                 angular_rapidity = 0.5_prt * (lower_bound + upper_bound);
             }
         }
-        const amrex::ParticleReal costh = amrex::max(
-            -1._prt, amrex::min(1._prt, std::tanh(angular_rapidity) / beta));
-        const amrex::ParticleReal sinth = std::sqrt(
-            amrex::max(0._prt, 1._prt - costh * costh));
+        // Compute beta*cos(theta) and beta*sin(theta) directly from the angular
+        // rapidity. In particular, forming sin(theta) as sqrt(1-cos(theta)^2)
+        // loses all transverse momentum in single precision near the forward peaks.
+        const amrex::ParticleReal beta_costh = std::tanh(angular_rapidity);
+        const amrex::ParticleReal beta_sinth = std::sqrt(
+            std::sinh(max_angular_rapidity - angular_rapidity)
+            * std::sinh(max_angular_rapidity + angular_rapidity))
+            / (std::cosh(max_angular_rapidity) * std::cosh(angular_rapidity));
 
         // Sample azimuthal angle uniformly in [0, 2pi)
         const amrex::ParticleReal phi = 2._prt * MathConst::pi * amrex::Random(engine);
@@ -227,9 +231,12 @@ namespace {
 
         // Momentum of the first product in the CM frame, with the BW
         // polar angle measured from the collision axis
-        const amrex::ParticleReal p_star_perp1 = std::sqrt(p_star_sq) * sinth * std::cos(phi);
-        const amrex::ParticleReal p_star_perp2 = std::sqrt(p_star_sq) * sinth * std::sin(phi);
-        const amrex::ParticleReal p_star_par  = std::sqrt(p_star_sq) * costh;
+        const amrex::ParticleReal p_star_scale = me * PhysConst::c * gamma_star;
+        const amrex::ParticleReal p_star_perp1 =
+            p_star_scale * beta_sinth * std::cos(phi);
+        const amrex::ParticleReal p_star_perp2 =
+            p_star_scale * beta_sinth * std::sin(phi);
+        const amrex::ParticleReal p_star_par = p_star_scale * beta_costh;
         px_star = p_star_perp1*e1x + p_star_perp2*e2x + p_star_par*nx;
         py_star = p_star_perp1*e1y + p_star_perp2*e2y + p_star_par*ny;
         pz_star = p_star_perp1*e1z + p_star_perp2*e2z + p_star_par*nz;
