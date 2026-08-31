@@ -26,6 +26,11 @@ The test verifies:
 import re
 import sys
 
+import matplotlib
+
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 import numpy as np
 from openpmd_viewer import OpenPMDTimeSeries
 from scipy.constants import c, m_e
@@ -127,10 +132,7 @@ def check_angular_distribution(ts, ux_photon):
     # ux/uy/uz are normalized momenta (gamma*beta) for electrons
     u_mag = np.sqrt(ux_e**2 + uy_e**2 + uz_e**2)
     gamma = np.sqrt(1.0 + u_mag**2)
-    assert np.all(np.isclose(gamma, gamma_expected, rtol=1e-5)), (
-        f"Expected gamma={gamma_expected}, "
-        f"got min={gamma.min():.6f}, max={gamma.max():.6f}"
-    )
+    gamma_matches = np.all(np.isclose(gamma, gamma_expected, rtol=1e-5))
 
     # cos(theta) in the CM frame (= lab frame for this setup).
     # The BW polar angle is measured from the collision axis, which is
@@ -161,9 +163,6 @@ def check_angular_distribution(ts, ux_photon):
         np.max(np.abs(empirical_cdf_before - sorted_cdf)),
     )
     print(f"Weighted CDF distance: {ks_distance:.6f}")
-    assert ks_distance < 0.01, (
-        f"Angular distribution does not match BW theory: KS distance={ks_distance:.6f}"
-    )
 
     # Binned histogram in angular rapidity, weighted by particle weight.
     n_bins = 20
@@ -185,20 +184,14 @@ def check_angular_distribution(ts, ux_photon):
     )
     term2 = -2.0 * beta * (1.0 + one_minus_beta2)
     integral_f_analytical = (term1 + term2) / beta
-    assert np.isclose(2.0 * integral_at_one, integral_f_analytical, rtol=1e-6), (
-        f"Transformed integral {2.0 * integral_at_one:.8f} != "
-        f"analytical integral {integral_f_analytical:.8f}"
+    integral_matches = np.isclose(
+        2.0 * integral_at_one, integral_f_analytical, rtol=1e-6
     )
 
     # Compare the binned simulation result with theory.
     rel_err = np.abs(hist - expected_counts) / expected_counts
     max_rel_err = np.max(rel_err)
     print(f"Max relative error in angular distribution: {max_rel_err:.4f}")
-    assert max_rel_err < 0.15, (
-        f"Angular distribution does not match BW theory: max_rel_err={max_rel_err:.4f}"
-    )
-
-    import matplotlib.pyplot as plt
 
     y_fine = np.linspace(-max_angular_rapidity, max_angular_rapidity, 500)
     cdf_fine = (
@@ -222,6 +215,21 @@ def check_angular_distribution(ts, ux_photon):
     fig.tight_layout()
     fig.savefig("angular_distribution.png", dpi=150)
     print("Saved angular_distribution.png")
+
+    assert gamma_matches, (
+        f"Expected gamma={gamma_expected}, "
+        f"got min={gamma.min():.6f}, max={gamma.max():.6f}"
+    )
+    assert ks_distance < 0.01, (
+        f"Angular distribution does not match BW theory: KS distance={ks_distance:.6f}"
+    )
+    assert integral_matches, (
+        f"Transformed integral {2.0 * integral_at_one:.8f} != "
+        f"analytical integral {integral_f_analytical:.8f}"
+    )
+    assert max_rel_err < 0.15, (
+        f"Angular distribution does not match BW theory: max_rel_err={max_rel_err:.4f}"
+    )
 
 
 def main():
