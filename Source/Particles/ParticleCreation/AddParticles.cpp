@@ -875,7 +875,28 @@ PhysicalParticleContainer::AddPlasma (PlasmaInjector& plasma_injector, int lev, 
                 pcounts[index] = num_ppc*r;
                 // update pcount by checking if cell-corners or cell-center
                 // has non-zero density
+#if defined(WARPX_DIM_RZ) || defined(WARPX_DIM_RCYLINDER) || defined(WARPX_DIM_RSPHERE)
+                // With radial_numpercell_power != 0, the particles created in this
+                // ("logical") cell are later moved radially (see the radial remapping
+                // below). The density must therefore be checked at the radii where
+                // the particles will actually be placed, not at the logical radii;
+                // otherwise cells are wrongly skipped when the density vanishes at
+                // the logical radius but not at the remapped one (e.g. hollow profiles),
+                // and too little plasma is loaded.
+                const auto radial_remap = [=] (amrex::Real x) -> amrex::Real {
+                    amrex::Real const xu = amrex::min(amrex::max((x - rmin)/(rmax - rmin), 0._rt), 1._rt);
+                    amrex::Real const rc = std::pow(rmax, 1._rt + radial_numpercell_power)
+                                         - std::pow(rmin, 1._rt + radial_numpercell_power);
+                    amrex::Real const rminp = std::pow(rmin, 1._rt + radial_numpercell_power);
+                    return std::pow(xu*rc + rminp, 1._rt/(1._rt + radial_numpercell_power));
+                };
+                const bool do_remap = (radial_numpercell_power != 0._rt) && (rmax > rmin);
+                const auto xlim = do_remap ?
+                    amrex::GpuArray<Real, 3>{radial_remap(lo.x), radial_remap((lo.x+hi.x)/2._rt), radial_remap(hi.x)} :
+                    amrex::GpuArray<Real, 3>{lo.x,(lo.x+hi.x)/2._rt,hi.x};
+#else
                 const auto xlim = amrex::GpuArray<Real, 3>{lo.x,(lo.x+hi.x)/2._rt,hi.x};
+#endif
                 const auto ylim = amrex::GpuArray<Real, 3>{lo.y,(lo.y+hi.y)/2._rt,hi.y};
                 const auto zlim = amrex::GpuArray<Real, 3>{lo.z,(lo.z+hi.z)/2._rt,hi.z};
 

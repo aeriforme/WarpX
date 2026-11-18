@@ -40,3 +40,13 @@ add_warpx_test(
     "analysis_default_regression.py --path diags/diag1/"  # checksum
     test_rsphere_initial_distribution_prepare  # dependency
 )
+
+add_warpx_test(
+    test_rz_radial_numpercell_power_hollow  # name
+    RZ  # dims
+    1  # nprocs
+    inputs_test_rz_radial_numpercell_power_hollow  # inputs
+    "analysis_rz_radial_numpercell_power_hollow.py"  # analysis
+    OFF  # checksum
+    OFF  # dependency
+)

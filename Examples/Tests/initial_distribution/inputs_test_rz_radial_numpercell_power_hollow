@@ -1,0 +1,66 @@
+# Uniform hollow cylinder (rin < r < rout) loaded with different values of
+# radial_numpercell_power. The total loaded weight must be
+#     n0 * pi * (rout^2 - rin^2) * Lz
+# for every power. (This used to fail for power != 0: cells whose *logical*
+# radius lies in the hole were skipped, although the radial remapping moves
+# their particles into the plasma.)
+max_step = 0
+amr.n_cell = 32 32
+amr.max_grid_size = 32
+amr.blocking_factor = 8
+amr.max_level = 0
+geometry.dims = RZ
+geometry.prob_lo = 0. 0.
+geometry.prob_hi = 1.e-6 1.e-6
+warpx.n_rz_azimuthal_modes = 1
+
+boundary.field_lo = none periodic
+boundary.field_hi = pec periodic
+boundary.particle_lo = none periodic
+boundary.particle_hi = absorbing periodic
+
+warpx.const_dt = 1.e-18
+warpx.do_electrostatic = labframe
+algo.particle_shape = 1
+
+my_constants.n0 = 1.e24
+my_constants.rin = 0.5e-6
+my_constants.rout = 1.e-6
+
+particles.species_names = power0 power1 power2
+
+power0.species_type = electron
+power0.injection_style = NUniformPerCell
+power0.num_particles_per_cell_each_dim = 4 4 2
+power0.profile = parse_density_function
+power0.density_function(x,y,z) = "n0*(x*x+y*y >= rin*rin)"
+power0.xmax = rout
+power0.radial_numpercell_power = 0
+power0.momentum_distribution_type = at_rest
+
+power1.species_type = electron
+power1.injection_style = NUniformPerCell
+power1.num_particles_per_cell_each_dim = 4 4 2
+power1.profile = parse_density_function
+power1.density_function(x,y,z) = "n0*(x*x+y*y >= rin*rin)"
+power1.xmax = rout
+power1.radial_numpercell_power = 1
+power1.momentum_distribution_type = at_rest
+
+power2.species_type = electron
+power2.injection_style = NUniformPerCell
+power2.num_particles_per_cell_each_dim = 4 4 2
+power2.profile = parse_density_function
+power2.density_function(x,y,z) = "n0*(x*x+y*y >= rin*rin)"
+power2.xmax = rout
+power2.radial_numpercell_power = 2
+power2.momentum_distribution_type = at_rest
+
+diagnostics.diags_names = diag1
+diag1.intervals = 1
+diag1.diag_type = Full
+diag1.format = openpmd
+diag1.fields_to_plot = none
+diag1.power0.variables = x y z w
+diag1.power1.variables = x y z w
+diag1.power2.variables = x y z w
